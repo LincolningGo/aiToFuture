@@ -6,7 +6,7 @@
     <title>ATF Console</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" href="/favicon.svg" />
-    <link rel="stylesheet" href="/styles.css?v=20260326b" />
+    <link rel="stylesheet" href="/styles.css?v=20260326c" />
   </head>
   <body>
     <div class="bg-shape bg-shape-a"></div>
@@ -26,36 +26,78 @@
       
 
       <section class="auth-layer hidden" id="authPanel">
-        <div class="panel auth-panel reveal">
-          <div class="auth-head">
-            <h3>ATF</h3>
-            <button id="closeAuthBtn" class="ghost compact" type="button">关闭</button>
-          </div>
+	        <div class="panel auth-panel reveal">
+	          <div class="auth-head">
+	            <div>
+	              <h3>ATF</h3>
+	              <p class="auth-subtitle">登录后可查看记录、积分与生成结果</p>
+	            </div>
+	            <button id="closeAuthBtn" class="ghost compact" type="button">关闭</button>
+	          </div>
 
-          <div class="tabs">
-            <button class="tab active" data-tab="login" type="button">登录</button>
-            <button class="tab" data-tab="register" type="button">注册</button>
-          </div>
+	          <div class="tabs">
+	            <button class="tab active" data-tab="login" type="button">登录</button>
+	            <button class="tab" data-tab="register" type="button">注册</button>
+	          </div>
 
-          <form id="loginForm" class="form active" autocomplete="off">
-            <label>账号（用户名或邮箱）</label>
-            <input name="account" required />
-            <label>密码</label>
-            <input name="password" type="password" required minlength="8" />
-            <button type="submit">登录</button>
-          </form>
+	          <p id="authMsg" class="form-msg hidden"></p>
 
-          <form id="registerForm" class="form" autocomplete="off">
-            <label>用户名</label>
-            <input name="username" required minlength="3" maxlength="32" />
-            <label>邮箱</label>
-            <input name="email" type="email" required />
-            <label>密码（至少 8 位）</label>
-            <input name="password" type="password" required minlength="8" />
-            <button type="submit">注册</button>
-          </form>
-        </div>
-      </section>
+	          <form id="loginForm" class="form active" autocomplete="off">
+	            <label>账号（用户名或邮箱）</label>
+	            <input
+	              name="account"
+	              required
+	              placeholder="请输入用户名或邮箱"
+	              autocomplete="username"
+	              autocapitalize="none"
+	              spellcheck="false"
+	            />
+	            <label>密码</label>
+	            <input name="password" type="password" required minlength="8" placeholder="请输入密码" autocomplete="current-password" />
+	            <div class="form-actions">
+	              <button id="loginSubmitBtn" type="submit">登录</button>
+	            </div>
+	          </form>
+
+	          <form id="registerForm" class="form" autocomplete="off">
+	            <label>用户名</label>
+	            <input
+	              name="username"
+	              required
+	              minlength="3"
+	              maxlength="32"
+	              placeholder="3-32位，字母/数字/下划线"
+	              autocomplete="username"
+	              autocapitalize="none"
+	              spellcheck="false"
+	            />
+	            <label>邮箱</label>
+	            <input
+	              name="email"
+	              type="email"
+	              required
+	              placeholder="请输入常用邮箱"
+	              autocomplete="email"
+	              autocapitalize="none"
+	              inputmode="email"
+	              spellcheck="false"
+	            />
+	            <label>密码（至少 8 位）</label>
+	            <input
+	              name="password"
+	              type="password"
+	              required
+	              minlength="8"
+	              placeholder="建议使用高强度密码"
+	              autocomplete="new-password"
+	            />
+	            <p class="form-note">注册成功后将自动登录。</p>
+	            <div class="form-actions">
+	              <button id="registerSubmitBtn" type="submit">注册</button>
+	            </div>
+	          </form>
+	        </div>
+	      </section>
 
       <section class="panel workspace reveal" id="workspace">
         <header class="workspace-head">
@@ -181,6 +223,6 @@
       </div>
     </div>
 
-    <script src="/app.js?v=20260326b"></script>
+    <script src="/app.js?v=20260326c"></script>
   </body>
 </html>

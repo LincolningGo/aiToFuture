@@ -66,10 +66,13 @@ const els = {
   closeAuthBtn: document.getElementById('closeAuthBtn'),
   workspace: document.getElementById('workspace'),
   globalMsg: document.getElementById('globalMsg'),
+  authMsg: document.getElementById('authMsg'),
   sessionHint: document.getElementById('sessionHint'),
   authActionBtn: document.getElementById('authActionBtn'),
   loginForm: document.getElementById('loginForm'),
   registerForm: document.getElementById('registerForm'),
+  loginSubmitBtn: document.getElementById('loginSubmitBtn'),
+  registerSubmitBtn: document.getElementById('registerSubmitBtn'),
   tabs: [...document.querySelectorAll('.tab')],
   welcomeText: document.getElementById('welcomeText'),
   pointsText: document.getElementById('pointsText'),
@@ -105,6 +108,14 @@ const els = {
 
 function setGlobalMsg(msg) {
   els.globalMsg.textContent = msg || '';
+}
+
+function setAuthMsg(msg, type = 'error') {
+  if (!els.authMsg) return;
+  const normalized = String(msg || '').trim();
+  els.authMsg.textContent = normalized;
+  els.authMsg.classList.toggle('hidden', normalized.length === 0);
+  els.authMsg.dataset.type = normalized.length === 0 ? '' : type;
 }
 
 function setGenerateMsg(msg) {
@@ -227,11 +238,13 @@ function showTab(tab) {
   els.tabs.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
   els.loginForm.classList.toggle('active', tab === 'login');
   els.registerForm.classList.toggle('active', tab === 'register');
+  setAuthMsg('');
 }
 
 function openAuthPanel(tab = 'login', msg = '') {
   state.ui.authOpen = true;
   showTab(tab);
+  setAuthMsg(msg || '');
   if (msg) setGlobalMsg(msg);
   renderAuthState();
 }
@@ -239,11 +252,21 @@ function openAuthPanel(tab = 'login', msg = '') {
 function closeAuthPanel() {
   state.ui.authOpen = false;
   stopJobPolling();
+  setAuthMsg('');
   renderAuthState();
 }
 
 function requireLogin(msg) {
   openAuthPanel('login', msg || '请先登录');
+}
+
+function setButtonLoading(button, loadingText, isLoading) {
+  if (!button) return;
+  if (!button.dataset.defaultText) {
+    button.dataset.defaultText = button.textContent || '';
+  }
+  button.disabled = Boolean(isLoading);
+  button.textContent = isLoading ? loadingText : button.dataset.defaultText;
 }
 
 function getCostFor(capability) {
@@ -490,6 +513,7 @@ async function refreshMe(options = {}) {
     state.ledger.page = 1;
     await Promise.all([refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels()]);
     updatePromptCounter();
+    setAuthMsg('');
   } catch (_err) {
     stopJobPolling();
     state.user = null;
@@ -705,10 +729,12 @@ els.authPanel.addEventListener('click', (event) => {
 els.loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   setGlobalMsg('');
+  setAuthMsg('');
 
   const fd = new FormData(els.loginForm);
 
   try {
+    setButtonLoading(els.loginSubmitBtn, '登录中...', true);
     const authData = await api('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -720,14 +746,19 @@ els.loginForm.addEventListener('submit', async (event) => {
 
     els.loginForm.reset();
     await refreshMe({ authJustSet: true, fallbackUser: authData?.user || null });
+    setGlobalMsg('登录成功');
   } catch (err) {
+    setAuthMsg(err.message);
     setGlobalMsg(err.message);
+  } finally {
+    setButtonLoading(els.loginSubmitBtn, '登录中...', false);
   }
 });
 
 els.registerForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   setGlobalMsg('');
+  setAuthMsg('');
 
   const fd = new FormData(els.registerForm);
   const username = String(fd.get('username') || '').trim();
@@ -735,11 +766,13 @@ els.registerForm.addEventListener('submit', async (event) => {
   const password = String(fd.get('password') || '');
   const validationError = validateRegisterFormInput({ username, email, password });
   if (validationError) {
+    setAuthMsg(validationError);
     setGlobalMsg(validationError);
     return;
   }
 
   try {
+    setButtonLoading(els.registerSubmitBtn, '注册中...', true);
     const authData = await api('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -752,8 +785,12 @@ els.registerForm.addEventListener('submit', async (event) => {
 
     els.registerForm.reset();
     await refreshMe({ authJustSet: true, fallbackUser: authData?.user || null });
+    setGlobalMsg('注册成功，已自动登录');
   } catch (err) {
+    setAuthMsg(err.message);
     setGlobalMsg(err.message);
+  } finally {
+    setButtonLoading(els.registerSubmitBtn, '注册中...', false);
   }
 });
 
