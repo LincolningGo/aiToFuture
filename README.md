@@ -27,3 +27,11 @@ npm run start
 ```
 
 访问：`http://127.0.0.1:4002`
+
+## 安全共享建议
+- 不要共享 `.env`、日志、`*.pid` 等运行文件。
+- 共享前执行：
+```bash
+npm run security:check
+```
+- 只提交 `.env.example`（占位符），不要提交真实密码。

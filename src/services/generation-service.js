@@ -21,7 +21,35 @@ async function getCostPoints(capability) {
   return config.costs[capability] || 0;
 }
 
-async function deductPointsAndCreateJob({ userId, capability, prompt, costPoints, inputImagePath }) {
+async function resolveModel(capability, modelCode) {
+  const params = [capability];
+  let sql = `SELECT id, provider, capability, model_code, model_name, unit_cost_points, is_default
+             FROM ai_models
+             WHERE capability = ? AND is_active = 1`;
+
+  if (modelCode) {
+    sql += ' AND model_code = ?';
+    params.push(modelCode.trim());
+  }
+
+  sql += ' ORDER BY (provider = ?) DESC, is_default DESC, id ASC LIMIT 1';
+  params.push(config.aiProvider);
+
+  const [rows] = await pool.query(sql, params);
+  if (rows.length === 0) {
+    throw new AppError(
+      modelCode
+        ? `Model not found or disabled: ${modelCode}`
+        : `No active model configured for capability: ${capability}`,
+      400,
+      'MODEL_NOT_CONFIGURED',
+    );
+  }
+
+  return rows[0];
+}
+
+async function deductPointsAndCreateJob({ userId, capability, model, prompt, costPoints, inputImagePath }) {
   const conn = await pool.getConnection();
   const jobUuid = uuidv4();
   let jobId;
@@ -43,9 +71,20 @@ async function deductPointsAndCreateJob({ userId, capability, prompt, costPoints
 
     const [jobResult] = await conn.query(
       `INSERT INTO generation_jobs
-       (job_uuid, user_id, capability, provider, prompt_text, input_image_path, status, cost_points)
-       VALUES (?, ?, ?, ?, ?, ?, 'processing', ?)`,
-      [jobUuid, userId, capability, config.aiProvider, prompt, inputImagePath || null, costPoints],
+       (job_uuid, user_id, model_id, capability, provider, model_code, model_name, prompt_text, input_image_path, status, cost_points)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?)`,
+      [
+        jobUuid,
+        userId,
+        model.id,
+        capability,
+        config.aiProvider,
+        model.model_code,
+        model.model_name,
+        prompt,
+        inputImagePath || null,
+        costPoints,
+      ],
     );
     jobId = jobResult.insertId;
 
@@ -132,7 +171,7 @@ async function persistOutput({ userId, jobId, jobUuid, output }) {
   };
 }
 
-async function submitGeneration({ userId, capability, prompt, inputImageBase64 }) {
+async function submitGeneration({ userId, capability, prompt, modelCode, inputImageBase64 }) {
   const inputImageBuffer = normalizeBase64(inputImageBase64);
   let inputImagePath = null;
 
@@ -148,10 +187,13 @@ async function submitGeneration({ userId, capability, prompt, inputImageBase64 }
     await fs.writeFile(inputImagePath, inputImageBuffer);
   }
 
-  const costPoints = await getCostPoints(capability);
+  const model = await resolveModel(capability, modelCode);
+  const costPoints = model.unit_cost_points > 0 ? model.unit_cost_points : await getCostPoints(capability);
+
   const { jobId, jobUuid } = await deductPointsAndCreateJob({
     userId,
     capability,
+    model,
     prompt,
     costPoints,
     inputImagePath,
@@ -162,6 +204,8 @@ async function submitGeneration({ userId, capability, prompt, inputImageBase64 }
       capability,
       prompt,
       inputImageBuffer,
+      modelCode: model.model_code,
+      modelProvider: model.provider,
     });
 
     const persisted = await persistOutput({
@@ -174,6 +218,12 @@ async function submitGeneration({ userId, capability, prompt, inputImageBase64 }
     return {
       jobUuid,
       capability,
+      model: {
+        id: model.id,
+        code: model.model_code,
+        name: model.model_name,
+        provider: model.provider,
+      },
       status: 'completed',
       costPoints,
       output: persisted,
@@ -188,8 +238,8 @@ async function submitGeneration({ userId, capability, prompt, inputImageBase64 }
 async function listJobs(userId, limit = 20) {
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
   const [rows] = await pool.query(
-    `SELECT j.job_uuid, j.capability, j.status, j.cost_points, j.prompt_text,
-            j.error_message, j.created_at,
+    `SELECT j.job_uuid, j.capability, j.provider, j.model_code, j.model_name,
+            j.status, j.cost_points, j.prompt_text, j.error_message, j.created_at,
             o.file_type, o.local_path, o.public_url
      FROM generation_jobs j
      LEFT JOIN generation_outputs o ON o.job_id = j.id

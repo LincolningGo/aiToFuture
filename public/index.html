@@ -14,41 +14,51 @@
       <section class="hero reveal">
         <p class="eyebrow">AI Content Platform</p>
         <h1>aiToFuture 创作控制台</h1>
-        <p class="subtitle">文生图、图生图、文生视频、文生语音。登录后使用，按积分精细计费。</p>
+        <p class="subtitle">文生图、图生图、文生视频、文生语音。未登录可先填写创作参数，提交时会提示登录。</p>
       </section>
 
-      <section class="panel auth-panel reveal" id="authPanel">
-        <div class="tabs">
-          <button class="tab active" data-tab="login">登录</button>
-          <button class="tab" data-tab="register">注册</button>
+      <section class="auth-layer hidden" id="authPanel">
+        <div class="panel auth-panel reveal">
+          <div class="auth-head">
+            <h3>登录后继续创作</h3>
+            <button id="closeAuthBtn" class="ghost compact" type="button">关闭</button>
+          </div>
+
+          <div class="tabs">
+            <button class="tab active" data-tab="login" type="button">登录</button>
+            <button class="tab" data-tab="register" type="button">注册</button>
+          </div>
+
+          <form id="loginForm" class="form active" autocomplete="off">
+            <label>账号（用户名或邮箱）</label>
+            <input name="account" required />
+            <label>密码</label>
+            <input name="password" type="password" required minlength="8" />
+            <button type="submit">登录并进入</button>
+          </form>
+
+          <form id="registerForm" class="form" autocomplete="off">
+            <label>用户名</label>
+            <input name="username" required minlength="3" maxlength="32" />
+            <label>邮箱</label>
+            <input name="email" type="email" required />
+            <label>密码（至少 8 位）</label>
+            <input name="password" type="password" required minlength="8" />
+            <button type="submit">注册并登录</button>
+          </form>
         </div>
-
-        <form id="loginForm" class="form active" autocomplete="off">
-          <label>账号（用户名或邮箱）</label>
-          <input name="account" required />
-          <label>密码</label>
-          <input name="password" type="password" required minlength="8" />
-          <button type="submit">登录并进入</button>
-        </form>
-
-        <form id="registerForm" class="form" autocomplete="off">
-          <label>用户名</label>
-          <input name="username" required minlength="3" maxlength="32" />
-          <label>邮箱</label>
-          <input name="email" type="email" required />
-          <label>密码（至少 8 位）</label>
-          <input name="password" type="password" required minlength="8" />
-          <button type="submit">注册并登录</button>
-        </form>
       </section>
 
-      <section class="panel workspace hidden reveal" id="workspace">
+      <section class="panel workspace reveal" id="workspace">
         <header class="workspace-head">
           <div>
-            <h2 id="welcomeText">欢迎</h2>
-            <p id="pointsText">积分: -</p>
+            <h2 id="welcomeText">游客模式</h2>
+            <p id="pointsText">登录后可查看积分与历史记录</p>
           </div>
-          <button id="logoutBtn" class="ghost">退出登录</button>
+          <div class="session-box">
+            <p id="sessionHint" class="hint compact">未登录，提交任务时将提示登录。</p>
+            <button id="authActionBtn" class="ghost compact" type="button">登录 / 注册</button>
+          </div>
         </header>
 
         <div class="grid">
@@ -63,30 +73,60 @@
                 <option value="text_to_audio">文生语音</option>
               </select>
 
+              <label>模型选择</label>
+              <div class="field-row">
+                <select name="modelCode" id="modelSelect"></select>
+                <button type="button" id="refreshModelsBtn" class="ghost compact">刷新模型</button>
+              </div>
+              <p id="modelHint" class="hint compact"></p>
+
               <label>Prompt</label>
-              <textarea name="prompt" rows="4" required placeholder="输入你的创作描述"></textarea>
+              <textarea
+                name="prompt"
+                id="promptInput"
+                rows="4"
+                required
+                placeholder="输入你的创作描述"
+              ></textarea>
+
+              <div class="meta-row">
+                <span class="hint" id="promptCounter">0 / 800</span>
+                <span class="hint" id="selectedModelBadge">默认模型</span>
+              </div>
 
               <div id="imageInputBox" class="hidden">
                 <label>图生图输入图片</label>
                 <input name="inputImage" type="file" accept="image/*" />
               </div>
 
-              <button type="submit">提交生成</button>
+              <button type="submit" id="submitBtn">提交生成</button>
             </form>
             <p id="generateMsg" class="hint"></p>
           </div>
 
           <div class="card">
-            <h3>积分规则</h3>
-            <ul id="costList" class="list"></ul>
+            <h3>增强交互区</h3>
+            <p class="hint">点击下方模板可快速填充 Prompt，再按需微调。</p>
+            <div id="quickPromptList" class="chip-list"></div>
+            <hr class="line" />
+            <p class="hint" id="activeCapabilityText">当前能力: 文生图</p>
+            <p class="hint" id="activeModelText">当前模型: 默认模型</p>
+            <p class="hint" id="activeCostText">预计单次消耗: 10 积分</p>
           </div>
         </div>
 
         <div class="grid">
           <div class="card wide">
+            <h3>积分规则</h3>
+            <ul id="costList" class="list"></ul>
+          </div>
+          <div class="card wide">
             <h3>最近生成记录</h3>
             <div id="historyList" class="history"></div>
           </div>
+        </div>
+
+        <div class="grid single">
           <div class="card wide">
             <h3>积分流水</h3>
             <div id="ledgerList" class="history"></div>

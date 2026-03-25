@@ -14,7 +14,7 @@ function validateRegisterInput({ username, email, password }) {
   return null;
 }
 
-function validateGenerationInput({ capability, prompt, inputImageBase64 }) {
+function validateGenerationInput({ capability, prompt, inputImageBase64, modelCode }) {
   const supported = new Set(['text_to_image', 'image_to_image', 'text_to_video', 'text_to_audio']);
   if (!supported.has(capability)) {
     return 'Unsupported capability';
@@ -24,6 +24,15 @@ function validateGenerationInput({ capability, prompt, inputImageBase64 }) {
   }
   if (capability === 'image_to_image' && !inputImageBase64) {
     return 'image_to_image requires inputImageBase64';
+  }
+  if (modelCode !== undefined) {
+    if (typeof modelCode !== 'string') {
+      return 'modelCode must be a string';
+    }
+    const normalized = modelCode.trim();
+    if (!normalized || normalized.length > 80) {
+      return 'modelCode length must be 1-80';
+    }
   }
   return null;
 }

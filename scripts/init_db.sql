@@ -29,12 +29,32 @@ CREATE TABLE IF NOT EXISTS points_ledger (
   CONSTRAINT fk_points_ledger_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS ai_models (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  provider VARCHAR(40) NOT NULL,
+  capability ENUM('text_to_image', 'image_to_image', 'text_to_video', 'text_to_audio') NOT NULL,
+  model_code VARCHAR(80) NOT NULL,
+  model_name VARCHAR(120) NOT NULL,
+  unit_cost_points INT NOT NULL,
+  is_default TINYINT(1) NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  metadata_json JSON DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_models_provider_code (provider, model_code),
+  KEY idx_models_capability_active (capability, is_active)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS generation_jobs (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   job_uuid VARCHAR(64) NOT NULL,
   user_id BIGINT UNSIGNED NOT NULL,
+  model_id BIGINT UNSIGNED DEFAULT NULL,
   capability ENUM('text_to_image', 'image_to_image', 'text_to_video', 'text_to_audio') NOT NULL,
   provider VARCHAR(40) NOT NULL,
+  model_code VARCHAR(80) NOT NULL,
+  model_name VARCHAR(120) NOT NULL,
   prompt_text TEXT,
   input_image_path VARCHAR(255) DEFAULT NULL,
   status ENUM('queued', 'processing', 'completed', 'failed') NOT NULL DEFAULT 'queued',
@@ -45,7 +65,9 @@ CREATE TABLE IF NOT EXISTS generation_jobs (
   PRIMARY KEY (id),
   UNIQUE KEY uk_generation_jobs_uuid (job_uuid),
   KEY idx_generation_user_created (user_id, created_at),
-  CONSTRAINT fk_generation_jobs_user FOREIGN KEY (user_id) REFERENCES users(id)
+  KEY idx_generation_model (model_id),
+  CONSTRAINT fk_generation_jobs_user FOREIGN KEY (user_id) REFERENCES users(id),
+  CONSTRAINT fk_generation_jobs_model FOREIGN KEY (model_id) REFERENCES ai_models(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS generation_outputs (
@@ -74,3 +96,21 @@ INSERT INTO generation_cost_rules (capability, cost_points) VALUES
 ('text_to_video', 30),
 ('text_to_audio', 8)
 ON DUPLICATE KEY UPDATE cost_points = VALUES(cost_points);
+
+INSERT INTO ai_models
+(provider, capability, model_code, model_name, unit_cost_points, is_default, is_active, metadata_json)
+VALUES
+('minimax_mock', 'text_to_image', 'minimax-image-01', 'MiniMax Image 01 (Mock)', 10, 1, 1, JSON_OBJECT('track', 'image')),
+('minimax_mock', 'image_to_image', 'minimax-image-edit-01', 'MiniMax Image Edit 01 (Mock)', 12, 1, 1, JSON_OBJECT('track', 'image_edit')),
+('minimax_mock', 'text_to_video', 'minimax-video-01', 'MiniMax Video 01 (Mock)', 30, 1, 1, JSON_OBJECT('track', 'video')),
+('minimax_mock', 'text_to_audio', 'minimax-voice-01', 'MiniMax Voice 01 (Mock)', 8, 1, 1, JSON_OBJECT('track', 'audio')),
+('minimax', 'text_to_image', 'minimax-image-01', 'MiniMax Image 01', 10, 1, 1, JSON_OBJECT('track', 'image')),
+('minimax', 'image_to_image', 'minimax-image-edit-01', 'MiniMax Image Edit 01', 12, 1, 1, JSON_OBJECT('track', 'image_edit')),
+('minimax', 'text_to_video', 'minimax-video-01', 'MiniMax Video 01', 30, 1, 1, JSON_OBJECT('track', 'video')),
+('minimax', 'text_to_audio', 'minimax-voice-01', 'MiniMax Voice 01', 8, 1, 1, JSON_OBJECT('track', 'audio'))
+ON DUPLICATE KEY UPDATE
+  model_name = VALUES(model_name),
+  unit_cost_points = VALUES(unit_cost_points),
+  is_default = VALUES(is_default),
+  is_active = VALUES(is_active),
+  metadata_json = VALUES(metadata_json);

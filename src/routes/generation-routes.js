@@ -13,6 +13,7 @@ router.post('/submit', requireAuth, async (req, res, next) => {
     const payload = {
       capability: req.body.capability,
       prompt: req.body.prompt,
+      modelCode: req.body.modelCode,
       inputImageBase64: req.body.inputImageBase64,
     };
 
@@ -23,6 +24,7 @@ router.post('/submit', requireAuth, async (req, res, next) => {
       userId: req.auth.userId,
       capability: payload.capability,
       prompt: payload.prompt,
+      modelCode: payload.modelCode,
       inputImageBase64: payload.inputImageBase64,
     });
 
@@ -39,9 +41,10 @@ router.post('/submit-with-file', requireAuth, upload.single('inputImage'), async
   try {
     const capability = req.body.capability;
     const prompt = req.body.prompt;
+    const modelCode = req.body.modelCode;
     const inputImageBase64 = req.file ? req.file.buffer.toString('base64') : null;
 
-    const payload = { capability, prompt, inputImageBase64 };
+    const payload = { capability, prompt, modelCode, inputImageBase64 };
     const error = validateGenerationInput(payload);
     if (error) throw new AppError(error, 400, 'INVALID_GENERATION_INPUT');
 
@@ -49,6 +52,7 @@ router.post('/submit-with-file', requireAuth, upload.single('inputImage'), async
       userId: req.auth.userId,
       capability,
       prompt,
+      modelCode,
       inputImageBase64,
     });
 
