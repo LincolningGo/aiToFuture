@@ -14,6 +14,7 @@ function signToken(user) {
       userId: user.id,
       username: user.username,
       email: user.email,
+      role: user.role || 'user',
     },
     config.jwtSecret,
     { expiresIn: config.jwtExpiresIn },
@@ -57,8 +58,8 @@ router.post('/register', async (req, res, next) => {
 
       const [insertUser] = await conn.query(
         `INSERT INTO users
-         (username, email, password_hash, points)
-         VALUES (?, ?, ?, ?)`,
+         (username, email, role, password_hash, points)
+         VALUES (?, ?, 'user', ?, ?)`,
         [username, normalizedEmail, passwordHash, config.defaultRegisterPoints],
       );
       userId = insertUser.insertId;
@@ -82,6 +83,7 @@ router.post('/register', async (req, res, next) => {
       id: userId,
       username,
       email: normalizedEmail,
+      role: 'user',
       points: config.defaultRegisterPoints,
     };
 
@@ -108,7 +110,7 @@ router.post('/login', async (req, res, next) => {
 
     const normalized = String(account).trim();
     const [rows] = await pool.query(
-      'SELECT id, username, email, password_hash, points, is_active FROM users WHERE username = ? OR email = ? LIMIT 1',
+      'SELECT id, username, email, role, password_hash, points, is_active FROM users WHERE username = ? OR email = ? LIMIT 1',
       [normalized, normalized.toLowerCase()],
     );
 
@@ -136,6 +138,7 @@ router.post('/login', async (req, res, next) => {
           id: user.id,
           username: user.username,
           email: user.email,
+          role: user.role || 'user',
           points: user.points,
         },
       },

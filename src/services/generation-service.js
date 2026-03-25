@@ -174,6 +174,7 @@ async function persistOutput({ userId, jobId, jobUuid, output }) {
 async function submitGeneration({ userId, capability, prompt, modelCode, inputImageBase64 }) {
   const inputImageBuffer = normalizeBase64(inputImageBase64);
   let inputImagePath = null;
+  let inputImagePublicUrl = null;
 
   if (capability === 'image_to_image' && !inputImageBuffer) {
     throw new AppError('image_to_image requires source image', 400, 'SOURCE_IMAGE_REQUIRED');
@@ -185,6 +186,9 @@ async function submitGeneration({ userId, capability, prompt, modelCode, inputIm
     const inputName = `${uuidv4()}.png`;
     inputImagePath = path.join(inputDir, inputName);
     await fs.writeFile(inputImagePath, inputImageBuffer);
+
+    const appBase = String(config.appBaseUrl || '').replace(/\/+$/, '');
+    inputImagePublicUrl = `${appBase}/generated/${userId}/inputs/${inputName}`;
   }
 
   const model = await resolveModel(capability, modelCode);
@@ -206,6 +210,7 @@ async function submitGeneration({ userId, capability, prompt, modelCode, inputIm
       inputImageBuffer,
       modelCode: model.model_code,
       modelProvider: model.provider,
+      inputImagePublicUrl,
     });
 
     const persisted = await persistOutput({

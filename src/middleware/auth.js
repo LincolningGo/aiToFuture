@@ -25,6 +25,7 @@ function requireAuth(req, _res, next) {
       userId: payload.userId,
       username: payload.username,
       email: payload.email,
+      role: payload.role || 'user',
     };
     return next();
   } catch (err) {

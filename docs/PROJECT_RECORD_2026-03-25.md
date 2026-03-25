@@ -3,7 +3,7 @@
 ## 版本阶段
 - 项目：`aiToFuture`
 - 记录时间：2026-03-25（Asia/Shanghai）
-- 阶段目标：打通模型选择、多模态生成工作台、登录态交互、部署与安全基础能力。
+- 阶段目标：打通模型选择、多模态生成工作台、登录态交互、MiniMax 真实能力接入、管理员权限基础能力。
 
 ## 本阶段完成项
 
@@ -17,14 +17,35 @@
   - 返回结果中包含模型信息。
 - 参数校验增强：新增 `modelCode` 的类型与长度校验。
 
-### 2. 数据库与脚本
+### 2. MiniMax 真实接口接入
+- `src/services/provider/minimax-adapter.js` 从 scaffold 升级为真实适配：
+  - 文生图 / 图生图：`POST /v1/image_generation`
+  - 文生视频：`POST /v1/video_generation` + `GET /v1/query/video_generation` + `GET /v1/files/retrieve`
+  - 文生语音：`POST /v1/t2a_v2`
+- 增加网络错误、HTTP 错误、业务错误映射（`AppError`）。
+- 增加图片/视频/音频下载与 MIME/扩展名推断。
+- 修复文生图返回解析兼容问题：支持 `image_urls` 为字符串数组格式，避免“服务返回格式异常”。
+- 图生图支持输入图 URL 透传；当 URL 可能为私网地址时自动回退 `data:image/...;base64`。
+
+### 3. 用户与权限基础
+- 新增用户角色字段：`users.role`（默认 `user`）。
+- 登录 JWT 与鉴权上下文补充 `role`。
+- `POST /api/auth/login`、`GET /api/user/me` 返回中补充 `role` 字段。
+- 新增迁移脚本：`scripts/migrate_add_user_role.sql`。
+- 已创建并验证超级管理员账号：`lincolning`（角色：`super_admin`）。
+
+### 4. 数据库与脚本
 - 初始化脚本扩展：`scripts/init_db.sql`
   - 增加 `ai_models` 表。
   - 增加生成任务模型字段。
   - 写入默认模型与费用规则。
-- 新增迁移脚本：`scripts/migrate_add_models.sql`。
+  - `users` 表增加 `role` 字段。
+- 迁移脚本：
+  - `scripts/migrate_add_models.sql`
+  - `scripts/migrate_add_user_role.sql`
+- MiniMax 模型默认代码与官方命名对齐（脚本与配置同步更新）。
 
-### 3. 前端交互与页面
+### 5. 前端交互与页面
 - 工作台能力：
   - 能力类型选择、模型选择、Prompt 快捷模板、积分预估展示。
   - 图生图文件上传联动。
@@ -35,7 +56,7 @@
   - 点击“提交生成/刷新模型”等需鉴权动作时弹出登录层。
   - 登录成功后无缝刷新状态并继续使用。
 
-### 4. 运维与启动
+### 6. 运维与启动
 - 新增脚本：
   - `scripts/start.sh`
   - `scripts/stop.sh`
@@ -45,19 +66,18 @@
   - `npm run security:check` 可直接执行。
 - `.gitignore` 强化：忽略 `.env.*`（保留 `.env.example`）、`*.pid`、日志文件。
 
-### 5. 服务器侧执行记录（非仓库文件）
+### 7. 服务器侧执行记录（非仓库文件）
 - 服务运行：`aiToFuture` 已可在 `http://127.0.0.1:4002` 访问。
-- systemd：已部署并启用 `aitofuture.service`（开机自启）。
 - 数据库：已创建独立库 `aitofuture`。
-- 权限：
-  - `lincolning`：`aitofuture` 只读。
-  - `readonly_client`：`aitofuture` 只读。
+- 当前权限基线：
+  - `lincolning` 对 `aitofuture` 具备管理权限（用于当前阶段迁移与数据写入）。
+  - `readonly_client` 对全库只读。
 
 ## 当前已知说明
-- 由于 `lincolning` 为只读，`scripts/start.sh` 中数据库初始化会提示权限不足并跳过；不影响服务启动。
-- 若后续需要在线迁移或自动建表，建议单独配置一个受控写权限账号（仅对 `aitofuture`）。
+- 目前管理员权限控制的“路由级拦截中间件”尚未落地；当前完成的是角色数据链路与超级管理员账号基线。
+- 若后续进入生产，建议收敛数据库应用账号权限（按最小权限原则拆分读写账户）。
 
 ## 下阶段建议
-- 增加管理员模型管理页面（启停模型、默认模型切换、单模型计费调整）。
-- 增加登录态缓存提示与会话超时引导。
-- 增加前端 E2E 回归测试（登录、提交、未登录拦截）。
+- 增加管理员权限中间件（如 `requireRole('super_admin')`）与后台管理接口。
+- 增加模型管理页面（启停模型、默认模型切换、单模型计费调整）。
+- 增加前端 E2E 回归测试（登录、提交、未登录拦截、管理员权限校验）。

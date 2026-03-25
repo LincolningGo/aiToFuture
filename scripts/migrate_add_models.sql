@@ -38,10 +38,10 @@ VALUES
 ('minimax_mock', 'image_to_image', 'minimax-image-edit-01', 'MiniMax Image Edit 01 (Mock)', 12, 1, 1, JSON_OBJECT('track', 'image_edit')),
 ('minimax_mock', 'text_to_video', 'minimax-video-01', 'MiniMax Video 01 (Mock)', 30, 1, 1, JSON_OBJECT('track', 'video')),
 ('minimax_mock', 'text_to_audio', 'minimax-voice-01', 'MiniMax Voice 01 (Mock)', 8, 1, 1, JSON_OBJECT('track', 'audio')),
-('minimax', 'text_to_image', 'minimax-image-01', 'MiniMax Image 01', 10, 1, 1, JSON_OBJECT('track', 'image')),
-('minimax', 'image_to_image', 'minimax-image-edit-01', 'MiniMax Image Edit 01', 12, 1, 1, JSON_OBJECT('track', 'image_edit')),
-('minimax', 'text_to_video', 'minimax-video-01', 'MiniMax Video 01', 30, 1, 1, JSON_OBJECT('track', 'video')),
-('minimax', 'text_to_audio', 'minimax-voice-01', 'MiniMax Voice 01', 8, 1, 1, JSON_OBJECT('track', 'audio'))
+('minimax', 'text_to_image', 'image-01', 'MiniMax Image 01', 10, 1, 1, JSON_OBJECT('track', 'image')),
+('minimax', 'image_to_image', 'image-01-i2i', 'MiniMax Image 01 (I2I)', 12, 1, 1, JSON_OBJECT('track', 'image_edit')),
+('minimax', 'text_to_video', 'T2V-01-Director', 'MiniMax T2V-01-Director', 30, 1, 1, JSON_OBJECT('track', 'video')),
+('minimax', 'text_to_audio', 'speech-02-hd', 'MiniMax Speech 02 HD', 8, 1, 1, JSON_OBJECT('track', 'audio'))
 ON DUPLICATE KEY UPDATE
   model_name = VALUES(model_name),
   unit_cost_points = VALUES(unit_cost_points),
