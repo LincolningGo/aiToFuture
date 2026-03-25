@@ -31,19 +31,31 @@ router.get('/me', requireAuth, async (req, res, next) => {
 
 router.get('/points-ledger', requireAuth, async (req, res, next) => {
   try {
-    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const offset = (page - 1) * limit;
+
+    const [[totalRow]] = await pool.query('SELECT COUNT(*) AS total FROM points_ledger WHERE user_id = ?', [req.auth.userId]);
     const [rows] = await pool.query(
       `SELECT change_amount, balance_after, reason, reference_type, reference_id, created_at
        FROM points_ledger
        WHERE user_id = ?
        ORDER BY created_at DESC
-       LIMIT ?`,
-      [req.auth.userId, limit],
+       LIMIT ? OFFSET ?`,
+      [req.auth.userId, limit, offset],
     );
 
     res.json({
       success: true,
-      data: rows,
+      data: {
+        items: rows,
+        pagination: {
+          page,
+          limit,
+          total: Number(totalRow?.total || 0),
+          totalPages: Math.max(1, Math.ceil(Number(totalRow?.total || 0) / limit)),
+        },
+      },
     });
   } catch (err) {
     next(err);

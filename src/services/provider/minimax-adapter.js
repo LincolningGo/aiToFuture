@@ -11,6 +11,7 @@ const LEGACY_MODEL_ALIASES = {
   'minimax-video-01': 'T2V-01-Director',
   'minimax-voice-01': 'speech-02-hd',
   'image-01-i2i': 'image-01',
+  'image-01-live-i2i': 'image-01-live',
 };
 
 function buildMockOutput(capability, prompt) {
@@ -357,6 +358,41 @@ function audioFormatToMime(format) {
   return 'audio/mpeg';
 }
 
+async function generateLyrics(payload) {
+  const resp = await minimaxRequestJson({
+    method: 'POST',
+    pathname: '/v1/lyrics_generation',
+    body: {
+      mode: 'write_full_song',
+      prompt: payload.prompt,
+    },
+  });
+
+  const songTitle = String(getFirstDefined(resp?.data?.song_title, resp?.song_title, 'Generated Lyrics'));
+  const styleTags = String(getFirstDefined(resp?.data?.style_tags, resp?.style_tags, '') || '');
+  const lyrics = String(getFirstDefined(resp?.data?.lyrics, resp?.lyrics, '') || '').trim();
+
+  if (!lyrics) {
+    throw new AppError('MiniMax lyrics response missing lyrics', 502, 'MINIMAX_INVALID_RESPONSE');
+  }
+
+  const text = [songTitle, styleTags, lyrics].filter(Boolean).join('\n\n');
+  return {
+    buffer: Buffer.from(text, 'utf8'),
+    fileType: 'text',
+    extension: 'txt',
+    mimeType: 'text/plain; charset=utf-8',
+    metadata: {
+      provider: 'minimax',
+      capability: payload.capability,
+      model: payload.modelCode || 'lyrics_generation',
+      songTitle,
+      styleTags,
+      textPreview: lyrics.split('\n').slice(0, 6).join('\n'),
+    },
+  };
+}
+
 async function generateAudio(payload) {
   const requestedModel = resolveModelCode(payload.capability, payload.modelCode);
   const model = requestedModel.startsWith('speech-') ? requestedModel : config.minimaxT2aModel;
@@ -416,6 +452,48 @@ async function generateAudio(payload) {
   };
 }
 
+async function generateMusic(payload) {
+  const model = resolveModelCode(payload.capability, payload.modelCode);
+  const format = 'mp3';
+  const normalizedLyrics = String(payload.lyrics || '').trim();
+  const isInstrumental = Boolean(payload.isInstrumental);
+
+  const resp = await minimaxRequestJson({
+    method: 'POST',
+    pathname: '/v1/music_generation',
+    body: {
+      model,
+      prompt: payload.prompt,
+      lyrics: normalizedLyrics || undefined,
+      lyrics_optimizer: !isInstrumental && normalizedLyrics.length === 0,
+      is_instrumental: isInstrumental,
+      output_format: 'hex',
+      audio_setting: {
+        sample_rate: 44100,
+        bitrate: 256000,
+        format,
+      },
+    },
+  });
+
+  const audioString = getFirstDefined(resp?.data?.audio, resp?.audio);
+  const audioBuffer = parseAudioBuffer(audioString);
+
+  return {
+    buffer: audioBuffer,
+    fileType: 'audio',
+    extension: format,
+    mimeType: audioFormatToMime(format),
+    metadata: {
+      provider: 'minimax',
+      capability: payload.capability,
+      model,
+      isInstrumental,
+      lyricsIncluded: normalizedLyrics.length > 0,
+    },
+  };
+}
+
 async function generateWithMinimax(payload) {
   if (!config.minimaxApiKey) {
     throw new AppError('MINIMAX_API_KEY is required when AI_PROVIDER=minimax', 500, 'MINIMAX_KEY_MISSING');
@@ -429,6 +507,12 @@ async function generateWithMinimax(payload) {
   }
   if (payload.capability === 'text_to_audio') {
     return generateAudio(payload);
+  }
+  if (payload.capability === 'lyrics_generation') {
+    return generateLyrics(payload);
+  }
+  if (payload.capability === 'music_generation') {
+    return generateMusic(payload);
   }
 
   throw new AppError(`Unsupported capability: ${payload.capability}`, 400, 'UNSUPPORTED_CAPABILITY');

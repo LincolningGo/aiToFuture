@@ -8,10 +8,23 @@ const router = express.Router();
 router.get('/active', requireAuth, async (req, res, next) => {
   try {
     const capability = req.query.capability ? String(req.query.capability).trim() : null;
-    const supported = new Set(['text_to_image', 'image_to_image', 'text_to_video', 'text_to_audio']);
+    const supported = new Set([
+      'text_to_image',
+      'image_to_image',
+      'text_to_video',
+      'text_to_audio',
+      'lyrics_generation',
+      'music_generation',
+    ]);
+    const hiddenLegacyCodes = ['minimax-image-01', 'minimax-image-edit-01', 'minimax-video-01', 'minimax-voice-01'];
 
     const whereParts = ['is_active = 1'];
     const params = [];
+
+    whereParts.push('provider <> ?');
+    params.push('minimax_mock');
+    whereParts.push(`NOT (provider = ? AND model_code IN (${hiddenLegacyCodes.map(() => '?').join(', ')}))`);
+    params.push('minimax', ...hiddenLegacyCodes);
 
     if (capability) {
       if (!supported.has(capability)) {

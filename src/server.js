@@ -16,7 +16,7 @@ async function bootstrap() {
   }
 
   app.listen(config.port, '0.0.0.0', () => {
-    console.log(`[BOOT] aiToFuture running at http://127.0.0.1:${config.port}`);
+    console.log(`[BOOT] ATF running at http://127.0.0.1:${config.port}`);
   });
 }
 

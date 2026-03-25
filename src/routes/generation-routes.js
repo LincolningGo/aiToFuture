@@ -15,6 +15,8 @@ router.post('/submit', requireAuth, async (req, res, next) => {
       prompt: req.body.prompt,
       modelCode: req.body.modelCode,
       inputImageBase64: req.body.inputImageBase64,
+      lyrics: req.body.lyrics,
+      isInstrumental: req.body.isInstrumental === true || req.body.isInstrumental === 'true',
     };
 
     const error = validateGenerationInput(payload);
@@ -26,6 +28,8 @@ router.post('/submit', requireAuth, async (req, res, next) => {
       prompt: payload.prompt,
       modelCode: payload.modelCode,
       inputImageBase64: payload.inputImageBase64,
+      lyrics: payload.lyrics,
+      isInstrumental: payload.isInstrumental,
     });
 
     res.status(201).json({
@@ -43,8 +47,10 @@ router.post('/submit-with-file', requireAuth, upload.single('inputImage'), async
     const prompt = req.body.prompt;
     const modelCode = req.body.modelCode;
     const inputImageBase64 = req.file ? req.file.buffer.toString('base64') : null;
+    const lyrics = req.body.lyrics;
+    const isInstrumental = req.body.isInstrumental === true || req.body.isInstrumental === 'true';
 
-    const payload = { capability, prompt, modelCode, inputImageBase64 };
+    const payload = { capability, prompt, modelCode, inputImageBase64, lyrics, isInstrumental };
     const error = validateGenerationInput(payload);
     if (error) throw new AppError(error, 400, 'INVALID_GENERATION_INPUT');
 
@@ -54,6 +60,8 @@ router.post('/submit-with-file', requireAuth, upload.single('inputImage'), async
       prompt,
       modelCode,
       inputImageBase64,
+      lyrics,
+      isInstrumental,
     });
 
     res.status(201).json({ success: true, data: result });
@@ -64,8 +72,11 @@ router.post('/submit-with-file', requireAuth, upload.single('inputImage'), async
 
 router.get('/history', requireAuth, async (req, res, next) => {
   try {
-    const rows = await listJobs(req.auth.userId, req.query.limit);
-    res.json({ success: true, data: rows });
+    const result = await listJobs(req.auth.userId, {
+      limit: req.query.limit,
+      page: req.query.page,
+    });
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

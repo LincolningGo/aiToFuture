@@ -35,6 +35,8 @@ const config = {
     image_to_image: toInt(process.env.COST_IMAGE_TO_IMAGE, 12),
     text_to_video: toInt(process.env.COST_TEXT_TO_VIDEO, 30),
     text_to_audio: toInt(process.env.COST_TEXT_TO_AUDIO, 8),
+    lyrics_generation: toInt(process.env.COST_LYRICS_GENERATION, 6),
+    music_generation: toInt(process.env.COST_MUSIC_GENERATION, 20),
   },
 };
 

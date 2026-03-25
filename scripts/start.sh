@@ -67,7 +67,7 @@ if command -v mysql >/dev/null 2>&1; then
 fi
 
 if pgrep -f "node src/server.js" >/dev/null; then
-  echo "[INFO] aiToFuture is already running"
+  echo "[INFO] ATF is already running"
   exit 0
 fi
 
@@ -75,6 +75,6 @@ nohup npm run start > "$ROOT_DIR/logs/runtime.log" 2>&1 &
 PID=$!
 echo "$PID" > "$ROOT_DIR/aiToFuture.pid"
 
-echo "[OK] aiToFuture started (PID: $PID)"
+echo "[OK] ATF started (PID: $PID)"
 echo "[OK] URL: http://127.0.0.1:${PORT:-4002}"
 echo "[OK] Log: $ROOT_DIR/logs/runtime.log"

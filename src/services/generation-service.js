@@ -10,6 +10,14 @@ const QUEUE_CONCURRENCY = Math.max(1, Number(process.env.GENERATION_QUEUE_CONCUR
 const generationQueue = [];
 let activeWorkers = 0;
 
+function getDateBucket() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
+}
+
 function normalizeBase64(input) {
   if (!input) return null;
   const stripped = input.replace(/^data:.*;base64,/, '');
@@ -154,14 +162,15 @@ async function markFailed(jobUuid, message) {
 }
 
 async function persistOutput({ userId, jobId, jobUuid, output }) {
-  const userDir = path.join(config.storageRoot, String(userId));
-  await fs.mkdir(userDir, { recursive: true });
+  const dateBucket = getDateBucket();
+  const targetDir = path.join(config.storageRoot, dateBucket);
+  await fs.mkdir(targetDir, { recursive: true });
 
   const filename = `${jobUuid}.${output.extension}`;
-  const absolutePath = path.join(userDir, filename);
+  const absolutePath = path.join(targetDir, filename);
   await fs.writeFile(absolutePath, output.buffer);
 
-  const publicUrl = `/generated/${userId}/${filename}`;
+  const publicUrl = `/generated/${dateBucket}/${filename}`;
 
   await pool.query(
     `INSERT INTO generation_outputs
@@ -213,7 +222,7 @@ async function processGenerationTask(task) {
   }
 }
 
-async function submitGeneration({ userId, capability, prompt, modelCode, inputImageBase64 }) {
+async function submitGeneration({ userId, capability, prompt, modelCode, inputImageBase64, lyrics, isInstrumental }) {
   const inputImageBuffer = normalizeBase64(inputImageBase64);
   let inputImagePath = null;
   let inputImagePublicUrl = null;
@@ -223,14 +232,15 @@ async function submitGeneration({ userId, capability, prompt, modelCode, inputIm
   }
 
   if (inputImageBuffer) {
-    const inputDir = path.join(config.storageRoot, String(userId), 'inputs');
+    const dateBucket = getDateBucket();
+    const inputDir = path.join(config.storageRoot, dateBucket, 'inputs');
     await fs.mkdir(inputDir, { recursive: true });
     const inputName = `${uuidv4()}.png`;
     inputImagePath = path.join(inputDir, inputName);
     await fs.writeFile(inputImagePath, inputImageBuffer);
 
     const appBase = String(config.appBaseUrl || '').replace(/\/+$/, '');
-    inputImagePublicUrl = `${appBase}/generated/${userId}/inputs/${inputName}`;
+    inputImagePublicUrl = `${appBase}/generated/${dateBucket}/inputs/${inputName}`;
   }
 
   const model = await resolveModel(capability, modelCode);
@@ -248,6 +258,8 @@ async function submitGeneration({ userId, capability, prompt, modelCode, inputIm
   const providerPayload = {
     capability,
     prompt,
+    lyrics,
+    isInstrumental,
     inputImageBuffer,
     modelCode: model.model_code,
     modelProvider: model.provider,
@@ -277,20 +289,44 @@ async function submitGeneration({ userId, capability, prompt, modelCode, inputIm
   };
 }
 
-async function listJobs(userId, limit = 20) {
-  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+async function listJobs(userId, options = {}) {
+  const safeLimit = Math.min(Math.max(Number(options.limit) || 10, 1), 100);
+  const safePage = Math.max(Number(options.page) || 1, 1);
+  const offset = (safePage - 1) * safeLimit;
+
+  const [[totalRow]] = await pool.query('SELECT COUNT(*) AS total FROM generation_jobs WHERE user_id = ?', [userId]);
+  const [[runningRow]] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM generation_jobs
+     WHERE user_id = ? AND status IN ('queued', 'processing')`,
+    [userId],
+  );
+
   const [rows] = await pool.query(
     `SELECT j.job_uuid, j.capability, j.provider, j.model_code, j.model_name,
             j.status, j.cost_points, j.prompt_text, j.error_message, j.created_at,
-            o.file_type, o.local_path, o.public_url
+            o.file_type, o.local_path, o.public_url, o.metadata_json AS output_metadata
      FROM generation_jobs j
      LEFT JOIN generation_outputs o ON o.job_id = j.id
      WHERE j.user_id = ?
      ORDER BY j.created_at DESC
-     LIMIT ?`,
-    [userId, safeLimit],
+     LIMIT ? OFFSET ?`,
+    [userId, safeLimit, offset],
   );
-  return rows;
+
+  const total = Number(totalRow?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / safeLimit));
+
+  return {
+    items: rows,
+    pagination: {
+      page: Math.min(safePage, totalPages),
+      limit: safeLimit,
+      total,
+      totalPages,
+    },
+    hasRunningJobs: Number(runningRow?.total || 0) > 0,
+  };
 }
 
 module.exports = {
