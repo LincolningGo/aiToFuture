@@ -7,6 +7,7 @@ const { AppError } = require('../utils/errors');
 const { generateContent } = require('./provider/minimax-adapter');
 
 const QUEUE_CONCURRENCY = Math.max(1, Number(process.env.GENERATION_QUEUE_CONCURRENCY || 2));
+const MAX_INPUT_IMAGE_BYTES = 10 * 1024 * 1024;
 const generationQueue = [];
 let activeWorkers = 0;
 
@@ -20,8 +21,55 @@ function getDateBucket() {
 
 function normalizeBase64(input) {
   if (!input) return null;
-  const stripped = input.replace(/^data:.*;base64,/, '');
-  return Buffer.from(stripped, 'base64');
+  const stripped = String(input)
+    .trim()
+    .replace(/^data:[^;]+;base64,/i, '')
+    .replace(/\s+/g, '');
+
+  if (!stripped) return null;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(stripped) || stripped.length % 4 === 1) {
+    throw new AppError('Invalid base64 image payload', 400, 'INVALID_IMAGE_PAYLOAD');
+  }
+
+  const buffer = Buffer.from(stripped, 'base64');
+  if (!buffer.length) {
+    throw new AppError('Invalid base64 image payload', 400, 'INVALID_IMAGE_PAYLOAD');
+  }
+  return buffer;
+}
+
+function detectImageInfo(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return null;
+
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return { extension: 'png', mimeType: 'image/png' };
+  }
+
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return { extension: 'jpg', mimeType: 'image/jpeg' };
+  }
+
+  if (
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return { extension: 'webp', mimeType: 'image/webp' };
+  }
+
+  if (buffer.subarray(0, 6).toString('ascii') === 'GIF87a' || buffer.subarray(0, 6).toString('ascii') === 'GIF89a') {
+    return { extension: 'gif', mimeType: 'image/gif' };
+  }
+
+  return null;
 }
 
 async function getCostPoints(capability) {
@@ -224,6 +272,7 @@ async function processGenerationTask(task) {
 
 async function submitGeneration({ userId, capability, prompt, modelCode, inputImageBase64, lyrics, isInstrumental }) {
   const inputImageBuffer = normalizeBase64(inputImageBase64);
+  const inputImageInfo = inputImageBuffer ? detectImageInfo(inputImageBuffer) : null;
   let inputImagePath = null;
   let inputImagePublicUrl = null;
 
@@ -232,10 +281,17 @@ async function submitGeneration({ userId, capability, prompt, modelCode, inputIm
   }
 
   if (inputImageBuffer) {
+    if (inputImageBuffer.length > MAX_INPUT_IMAGE_BYTES) {
+      throw new AppError('Input image is too large', 400, 'IMAGE_TOO_LARGE');
+    }
+    if (!inputImageInfo) {
+      throw new AppError('Only PNG/JPEG/WEBP/GIF image uploads are allowed', 400, 'INVALID_FILE_TYPE');
+    }
+
     const dateBucket = getDateBucket();
     const inputDir = path.join(config.storageRoot, dateBucket, 'inputs');
     await fs.mkdir(inputDir, { recursive: true });
-    const inputName = `${uuidv4()}.png`;
+    const inputName = `${uuidv4()}.${inputImageInfo.extension}`;
     inputImagePath = path.join(inputDir, inputName);
     await fs.writeFile(inputImagePath, inputImageBuffer);
 
@@ -261,6 +317,7 @@ async function submitGeneration({ userId, capability, prompt, modelCode, inputIm
     lyrics,
     isInstrumental,
     inputImageBuffer,
+    inputImageMimeType: inputImageInfo?.mimeType || null,
     modelCode: model.model_code,
     modelProvider: model.provider,
     inputImagePublicUrl,
@@ -305,7 +362,7 @@ async function listJobs(userId, options = {}) {
   const [rows] = await pool.query(
     `SELECT j.job_uuid, j.capability, j.provider, j.model_code, j.model_name,
             j.status, j.cost_points, j.prompt_text, j.error_message, j.created_at,
-            o.file_type, o.local_path, o.public_url, o.metadata_json AS output_metadata
+            o.file_type, o.public_url, o.metadata_json AS output_metadata
      FROM generation_jobs j
      LEFT JOIN generation_outputs o ON o.job_id = j.id
      WHERE j.user_id = ?
@@ -318,7 +375,36 @@ async function listJobs(userId, options = {}) {
   const totalPages = Math.max(1, Math.ceil(total / safeLimit));
 
   return {
-    items: rows,
+    items: rows.map((row) => {
+      let outputPreviewText = null;
+      if (row.output_metadata) {
+        try {
+          const metadata =
+            typeof row.output_metadata === 'string' ? JSON.parse(row.output_metadata) : row.output_metadata;
+          if (metadata && typeof metadata.textPreview === 'string' && metadata.textPreview.trim()) {
+            outputPreviewText = metadata.textPreview.trim();
+          }
+        } catch (_err) {
+          outputPreviewText = null;
+        }
+      }
+
+      return {
+        job_uuid: row.job_uuid,
+        capability: row.capability,
+        provider: row.provider,
+        model_code: row.model_code,
+        model_name: row.model_name,
+        status: row.status,
+        cost_points: row.cost_points,
+        prompt_text: row.prompt_text,
+        error_message: row.error_message,
+        created_at: row.created_at,
+        file_type: row.file_type,
+        public_url: row.public_url,
+        output_preview_text: outputPreviewText,
+      };
+    }),
     pagination: {
       page: Math.min(safePage, totalPages),
       limit: safeLimit,

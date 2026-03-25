@@ -167,9 +167,9 @@ function guessExtensionByMime(mimeType, fallbackExt) {
   return fallbackExt;
 }
 
-function toDataUrl(inputImageBuffer) {
+function toDataUrl(inputImageBuffer, mimeType = 'image/png') {
   if (!inputImageBuffer) return null;
-  return `data:image/png;base64,${inputImageBuffer.toString('base64')}`;
+  return `data:${mimeType};base64,${inputImageBuffer.toString('base64')}`;
 }
 
 function isLikelyPrivateUrl(urlValue) {
@@ -178,10 +178,32 @@ function isLikelyPrivateUrl(urlValue) {
   return /:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(raw);
 }
 
+function assertSafeRemoteUrl(urlValue) {
+  let parsed;
+  try {
+    parsed = new URL(String(urlValue || ''));
+  } catch {
+    throw new AppError('MiniMax returned invalid remote URL', 502, 'MINIMAX_INVALID_RESPONSE');
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new AppError('MiniMax returned unsupported remote URL', 502, 'MINIMAX_INVALID_RESPONSE');
+  }
+  if (parsed.username || parsed.password) {
+    throw new AppError('MiniMax returned unsafe remote URL', 502, 'MINIMAX_INVALID_RESPONSE');
+  }
+  if (isLikelyPrivateUrl(parsed.toString())) {
+    throw new AppError('MiniMax returned private remote URL', 502, 'MINIMAX_INVALID_RESPONSE');
+  }
+
+  return parsed.toString();
+}
+
 async function downloadBinary(url, fallbackMimeType = 'application/octet-stream') {
+  const safeUrl = assertSafeRemoteUrl(url);
   let response;
   try {
-    response = await fetch(url);
+    response = await fetch(safeUrl);
   } catch (err) {
     throw new AppError(`Failed to download MiniMax output: ${err.message}`, 502, 'MINIMAX_DOWNLOAD_FAILED');
   }
@@ -204,9 +226,9 @@ async function generateImage(payload) {
   };
 
   if (payload.capability === 'image_to_image') {
+    const dataUrl = toDataUrl(payload.inputImageBuffer, payload.inputImageMimeType || 'image/png');
     const publicUrl = String(payload.inputImagePublicUrl || '');
-    const dataUrl = toDataUrl(payload.inputImageBuffer);
-    const sourceImage = isLikelyPrivateUrl(publicUrl) ? dataUrl || publicUrl : publicUrl || dataUrl;
+    const sourceImage = dataUrl || (isLikelyPrivateUrl(publicUrl) ? '' : publicUrl);
     if (!sourceImage) {
       throw new AppError('MiniMax image_to_image requires input image', 400, 'SOURCE_IMAGE_REQUIRED');
     }

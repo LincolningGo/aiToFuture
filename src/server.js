@@ -6,6 +6,10 @@ const config = require('./config');
 const { testConnection } = require('./db/mysql');
 
 async function bootstrap() {
+  if (!config.jwtSecret || config.jwtSecret === 'dev_secret_change_me' || String(config.jwtSecret).length < 32) {
+    throw new Error('JWT_SECRET is missing or too weak; please set a strong secret (32+ chars)');
+  }
+
   await fs.mkdir(config.storageRoot, { recursive: true });
 
   try {

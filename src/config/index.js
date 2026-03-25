@@ -5,11 +5,19 @@ function toInt(value, fallback) {
   return Number.isNaN(n) ? fallback : n;
 }
 
+function parseOrigins(value) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: toInt(process.env.PORT, 4002),
   appBaseUrl: process.env.APP_BASE_URL || 'http://127.0.0.1:4002',
-  jwtSecret: process.env.JWT_SECRET || 'dev_secret_change_me',
+  allowedOrigins: parseOrigins(process.env.ALLOWED_ORIGINS),
+  jwtSecret: process.env.JWT_SECRET || '',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   db: {
     host: process.env.DB_HOST || '127.0.0.1',

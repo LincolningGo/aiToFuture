@@ -1,14 +1,21 @@
 const express = require('express');
 const multer = require('multer');
 const { requireAuth } = require('../middleware/auth');
+const { createRateLimit } = require('../middleware/rate-limit');
 const { validateGenerationInput } = require('../utils/validators');
 const { AppError } = require('../utils/errors');
 const { submitGeneration, listJobs } = require('../services/generation-service');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const generationRateLimit = createRateLimit({
+  windowMs: 60 * 1000,
+  max: 12,
+  message: 'Too many generation requests, please slow down',
+  keyPrefix: 'generation',
+});
 
-router.post('/submit', requireAuth, async (req, res, next) => {
+router.post('/submit', requireAuth, generationRateLimit, async (req, res, next) => {
   try {
     const payload = {
       capability: req.body.capability,
@@ -41,8 +48,12 @@ router.post('/submit', requireAuth, async (req, res, next) => {
   }
 });
 
-router.post('/submit-with-file', requireAuth, upload.single('inputImage'), async (req, res, next) => {
+router.post('/submit-with-file', requireAuth, generationRateLimit, upload.single('inputImage'), async (req, res, next) => {
   try {
+    if (req.file && String(req.file.mimetype || '').startsWith('image/') === false) {
+      throw new AppError('Only image uploads are allowed', 400, 'INVALID_FILE_TYPE');
+    }
+
     const capability = req.body.capability;
     const prompt = req.body.prompt;
     const modelCode = req.body.modelCode;

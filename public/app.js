@@ -120,6 +120,39 @@ function escapeHtml(input) {
     .replace(/'/g, '&#39;');
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function validateRegisterFormInput({ username, email, password }) {
+  const normalizedUsername = String(username || '').trim();
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const normalizedPassword = String(password || '');
+
+  if (!/^[a-zA-Z0-9_]{3,32}$/.test(normalizedUsername)) {
+    return '用户名需为 3-32 位，仅支持字母、数字、下划线';
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return '请输入正确的邮箱地址';
+  }
+  if (normalizedPassword.length < 8) {
+    return '密码至少需要 8 位';
+  }
+  return null;
+}
+
+function getSafeMediaUrl(input) {
+  const raw = String(input || '').trim();
+  if (!raw.startsWith('/generated/')) return '';
+  return encodeURI(raw)
+    .replace(/"/g, '%22')
+    .replace(/'/g, '%27')
+    .replace(/</g, '%3C')
+    .replace(/>/g, '%3E');
+}
+
 async function api(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   let requestPath = path;
@@ -253,21 +286,16 @@ function renderLedgerPagination() {
 function openPreview(row) {
   const title = `${CAPABILITY_LABELS[row.capability] || row.capability} · ${row.model_name || row.model_code || '-'}`;
   els.previewTitle.textContent = title;
+  const mediaUrl = getSafeMediaUrl(row.public_url);
 
-  if (row.file_type === 'image') {
-    els.previewBody.innerHTML = `<img src="${encodeURI(row.public_url)}" alt="preview" />`;
-  } else if (row.file_type === 'video') {
-    els.previewBody.innerHTML = `<video controls autoplay src="${encodeURI(row.public_url)}"></video>`;
-  } else if (row.file_type === 'audio') {
-    els.previewBody.innerHTML = `<audio controls autoplay src="${encodeURI(row.public_url)}"></audio>`;
+  if (row.file_type === 'image' && mediaUrl) {
+    els.previewBody.innerHTML = `<img src="${mediaUrl}" alt="preview" />`;
+  } else if (row.file_type === 'video' && mediaUrl) {
+    els.previewBody.innerHTML = `<video controls autoplay src="${mediaUrl}"></video>`;
+  } else if (row.file_type === 'audio' && mediaUrl) {
+    els.previewBody.innerHTML = `<audio controls autoplay src="${mediaUrl}"></audio>`;
   } else if (row.file_type === 'text') {
-    let previewText = '';
-    try {
-      const meta = typeof row.output_metadata === 'string' ? JSON.parse(row.output_metadata) : row.output_metadata;
-      previewText = meta?.textPreview || row.public_url || '文本结果';
-    } catch (_err) {
-      previewText = row.public_url || '文本结果';
-    }
+    const previewText = row.output_preview_text || '文本结果';
     els.previewBody.innerHTML = `<pre>${escapeHtml(previewText)}</pre>`;
   } else {
     els.previewBody.innerHTML = '<p class="hint">暂无可预览内容</p>';
@@ -284,6 +312,8 @@ function closePreview() {
 function getMediaActionOverlay(row) {
   const status = String(row.status || '').toLowerCase();
   if (!row.public_url || status !== 'completed' || row.file_type === 'text') return '';
+  const mediaUrl = getSafeMediaUrl(row.public_url);
+  if (!mediaUrl) return '';
 
   return `
     <div class="media-actions">
@@ -293,7 +323,7 @@ function getMediaActionOverlay(row) {
           <circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.8"/>
         </svg>
       </button>
-      <a class="media-action-btn" href="${encodeURI(row.public_url)}" download target="_blank" rel="noreferrer" aria-label="下载" title="下载">
+      <a class="media-action-btn" href="${mediaUrl}" download target="_blank" rel="noreferrer" aria-label="下载" title="下载">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M12 3v11m0 0 4-4m-4 4-4-4M4 17.5v1A2.5 2.5 0 0 0 6.5 21h11A2.5 2.5 0 0 0 20 18.5v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -426,9 +456,35 @@ async function refreshUserSnapshot() {
   return data;
 }
 
-async function refreshMe() {
+async function refreshMe(options = {}) {
+  const authJustSet = Boolean(options.authJustSet);
+  const fallbackUser = options.fallbackUser || null;
   try {
-    await refreshUserSnapshot();
+    if (authJustSet && fallbackUser) {
+      state.user = fallbackUser;
+      renderAuthState();
+    }
+
+    let snapshotLoaded = false;
+    let lastErr = null;
+    const attempts = authJustSet ? 3 : 1;
+
+    for (let i = 0; i < attempts; i += 1) {
+      try {
+        await refreshUserSnapshot();
+        snapshotLoaded = true;
+        break;
+      } catch (err) {
+        lastErr = err;
+        if (!authJustSet || i === attempts - 1) {
+          throw err;
+        }
+        await sleep(250 * (i + 1));
+      }
+    }
+
+    if (!snapshotLoaded && lastErr) throw lastErr;
+
     state.ui.authOpen = false;
     state.history.page = 1;
     state.ledger.page = 1;
@@ -467,25 +523,25 @@ function renderJobPreview(row) {
   }
 
   if (row.file_type === 'text') {
-    let previewText = '文本结果';
-    try {
-      const meta = typeof row.output_metadata === 'string' ? JSON.parse(row.output_metadata) : row.output_metadata;
-      if (meta?.textPreview) previewText = meta.textPreview;
-    } catch (_err) {
-      // ignore malformed metadata
-    }
+    const previewText = row.output_preview_text || '文本结果';
     return `<div class="job-preview text-preview"><pre>${escapeHtml(previewText)}</pre></div>`;
   }
 
   if (row.file_type === 'image') {
-    return `<div class="job-preview"><img src="${encodeURI(row.public_url)}" alt="output" />${getMediaActionOverlay(row)}</div>`;
+    const mediaUrl = getSafeMediaUrl(row.public_url);
+    if (!mediaUrl) return '<div class="job-preview empty">暂无输出</div>';
+    return `<div class="job-preview"><img src="${mediaUrl}" alt="output" />${getMediaActionOverlay(row)}</div>`;
   }
 
   if (row.file_type === 'audio') {
-    return `<div class="job-preview"><audio controls src="${encodeURI(row.public_url)}"></audio></div>`;
+    const mediaUrl = getSafeMediaUrl(row.public_url);
+    if (!mediaUrl) return '<div class="job-preview empty">暂无输出</div>';
+    return `<div class="job-preview"><audio controls src="${mediaUrl}"></audio></div>`;
   }
 
-  return `<div class="job-preview"><video controls src="${encodeURI(row.public_url)}"></video>${getMediaActionOverlay(row)}</div>`;
+  const mediaUrl = getSafeMediaUrl(row.public_url);
+  if (!mediaUrl) return '<div class="job-preview empty">暂无输出</div>';
+  return `<div class="job-preview"><video controls src="${mediaUrl}"></video>${getMediaActionOverlay(row)}</div>`;
 }
 
 function renderHistoryRows(rows) {
@@ -653,7 +709,7 @@ els.loginForm.addEventListener('submit', async (event) => {
   const fd = new FormData(els.loginForm);
 
   try {
-    await api('/api/auth/login', {
+    const authData = await api('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -663,7 +719,7 @@ els.loginForm.addEventListener('submit', async (event) => {
     });
 
     els.loginForm.reset();
-    await refreshMe();
+    await refreshMe({ authJustSet: true, fallbackUser: authData?.user || null });
   } catch (err) {
     setGlobalMsg(err.message);
   }
@@ -674,20 +730,28 @@ els.registerForm.addEventListener('submit', async (event) => {
   setGlobalMsg('');
 
   const fd = new FormData(els.registerForm);
+  const username = String(fd.get('username') || '').trim();
+  const email = String(fd.get('email') || '').trim().toLowerCase();
+  const password = String(fd.get('password') || '');
+  const validationError = validateRegisterFormInput({ username, email, password });
+  if (validationError) {
+    setGlobalMsg(validationError);
+    return;
+  }
 
   try {
-    await api('/api/auth/register', {
+    const authData = await api('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        username: fd.get('username'),
-        email: fd.get('email'),
-        password: fd.get('password'),
+        username,
+        email,
+        password,
       }),
     });
 
     els.registerForm.reset();
-    await refreshMe();
+    await refreshMe({ authJustSet: true, fallbackUser: authData?.user || null });
   } catch (err) {
     setGlobalMsg(err.message);
   }

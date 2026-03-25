@@ -676,12 +676,60 @@ button.compact {
     grid-template-columns: 1fr;
   }
 
-  
+  .page {
+    width: min(100%, 100vw);
+    padding: 18px 16px 28px;
+  }
+
+  .workspace-head,
+  .section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .session-box {
+    justify-items: stretch;
+  }
+
+  .history-item.job {
+    grid-template-columns: 1fr;
+  }
+}
 
 @media (max-width: 560px) {
   .page {
-    padding: 20px 14px 28px;
+    padding: 14px 12px 24px;
     width: 100%;
+  }
+
+  .hero {
+    margin-bottom: 8px;
+  }
+
+  .brand-lockup {
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .brand-logo {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+
+  .workspace-logo {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+  }
+
+  .hero h1 {
+    font-size: 24px;
+  }
+
+  .brand-subtitle {
+    font-size: 11px;
+    letter-spacing: 0.06em;
   }
 
   .preview-dialog {
@@ -701,5 +749,24 @@ button.compact {
 
   .auth-layer {
     padding: 12px;
+  }
+
+  .auth-panel {
+    max-width: none;
+    margin: 2vh auto 0;
+  }
+
+  .card,
+  .panel {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .workspace-brand {
+    gap: 10px;
+  }
+
+  .pager {
+    justify-content: flex-start;
   }
 }

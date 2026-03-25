@@ -4,9 +4,22 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const { pool } = require('../db/mysql');
 const { AppError } = require('../utils/errors');
+const { createRateLimit } = require('../middleware/rate-limit');
 const { validateRegisterInput } = require('../utils/validators');
 
 const router = express.Router();
+const loginRateLimit = createRateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  message: 'Too many login attempts, please try again later',
+  keyPrefix: 'auth:login',
+});
+const registerRateLimit = createRateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 8,
+  message: 'Too many register attempts, please try again later',
+  keyPrefix: 'auth:register',
+});
 
 function signToken(user) {
   return jwt.sign(
@@ -21,31 +34,42 @@ function signToken(user) {
   );
 }
 
-function setAuthCookie(res, token) {
+function isSecureRequest(req) {
+  if (req.secure) return true;
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+  return forwardedProto === 'https';
+}
+
+function setAuthCookie(req, res, token) {
+  const secure = isSecureRequest(req);
   res.cookie('aft_token', token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: config.nodeEnv === 'production',
+    secure,
+    path: '/',
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
-router.post('/register', async (req, res, next) => {
+router.post('/register', registerRateLimit, async (req, res, next) => {
   try {
     const { username, email, password } = req.body || {};
-    const error = validateRegisterInput({ username, email, password });
+    const normalizedUsername = String(username || '').trim();
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+
+    const error = validateRegisterInput({ username: normalizedUsername, email: normalizedEmail, password });
     if (error) {
       throw new AppError(error, 400, 'INVALID_REGISTER_INPUT');
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const [usernameRows] = await pool.query('SELECT id FROM users WHERE username = ? LIMIT 1', [normalizedUsername]);
+    if (usernameRows.length > 0) {
+      throw new AppError('Username already exists', 409, 'USERNAME_EXISTS');
+    }
 
-    const [existsRows] = await pool.query(
-      'SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1',
-      [username, normalizedEmail],
-    );
-    if (existsRows.length > 0) {
-      throw new AppError('Username or email already exists', 409, 'USER_EXISTS');
+    const [emailRows] = await pool.query('SELECT id FROM users WHERE email = ? LIMIT 1', [normalizedEmail]);
+    if (emailRows.length > 0) {
+      throw new AppError('Email already exists', 409, 'EMAIL_EXISTS');
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
@@ -60,7 +84,7 @@ router.post('/register', async (req, res, next) => {
         `INSERT INTO users
          (username, email, role, password_hash, points)
          VALUES (?, ?, 'user', ?, ?)`,
-        [username, normalizedEmail, passwordHash, config.defaultRegisterPoints],
+        [normalizedUsername, normalizedEmail, passwordHash, config.defaultRegisterPoints],
       );
       userId = insertUser.insertId;
 
@@ -81,14 +105,14 @@ router.post('/register', async (req, res, next) => {
 
     const user = {
       id: userId,
-      username,
+      username: normalizedUsername,
       email: normalizedEmail,
       role: 'user',
       points: config.defaultRegisterPoints,
     };
 
     const token = signToken(user);
-    setAuthCookie(res, token);
+    setAuthCookie(req, res, token);
 
     res.status(201).json({
       success: true,
@@ -101,7 +125,7 @@ router.post('/register', async (req, res, next) => {
   }
 });
 
-router.post('/login', async (req, res, next) => {
+router.post('/login', loginRateLimit, async (req, res, next) => {
   try {
     const { account, password } = req.body || {};
     if (!account || !password) {
@@ -129,7 +153,7 @@ router.post('/login', async (req, res, next) => {
     }
 
     const token = signToken(user);
-    setAuthCookie(res, token);
+    setAuthCookie(req, res, token);
 
     res.json({
       success: true,
@@ -149,7 +173,13 @@ router.post('/login', async (req, res, next) => {
 });
 
 router.post('/logout', (req, res) => {
-  res.clearCookie('aft_token');
+  const secure = isSecureRequest(req);
+  res.clearCookie('aft_token', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    path: '/',
+  });
   res.json({ success: true });
 });
 
