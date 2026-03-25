@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>aiToFuture - AI 创作中台</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape bg-shape-a"></div>
+    <div class="bg-shape bg-shape-b"></div>
+
+    <main class="page">
+      <section class="hero reveal">
+        <p class="eyebrow">AI Content Platform</p>
+        <h1>aiToFuture 创作控制台</h1>
+        <p class="subtitle">文生图、图生图、文生视频、文生语音。登录后使用，按积分精细计费。</p>
+      </section>
+
+      <section class="panel auth-panel reveal" id="authPanel">
+        <div class="tabs">
+          <button class="tab active" data-tab="login">登录</button>
+          <button class="tab" data-tab="register">注册</button>
+        </div>
+
+        <form id="loginForm" class="form active" autocomplete="off">
+          <label>账号（用户名或邮箱）</label>
+          <input name="account" required />
+          <label>密码</label>
+          <input name="password" type="password" required minlength="8" />
+          <button type="submit">登录并进入</button>
+        </form>
+
+        <form id="registerForm" class="form" autocomplete="off">
+          <label>用户名</label>
+          <input name="username" required minlength="3" maxlength="32" />
+          <label>邮箱</label>
+          <input name="email" type="email" required />
+          <label>密码（至少 8 位）</label>
+          <input name="password" type="password" required minlength="8" />
+          <button type="submit">注册并登录</button>
+        </form>
+      </section>
+
+      <section class="panel workspace hidden reveal" id="workspace">
+        <header class="workspace-head">
+          <div>
+            <h2 id="welcomeText">欢迎</h2>
+            <p id="pointsText">积分: -</p>
+          </div>
+          <button id="logoutBtn" class="ghost">退出登录</button>
+        </header>
+
+        <div class="grid">
+          <div class="card">
+            <h3>发起生成任务</h3>
+            <form id="generateForm">
+              <label>能力类型</label>
+              <select name="capability" id="capabilitySelect">
+                <option value="text_to_image">文生图</option>
+                <option value="image_to_image">图生图</option>
+                <option value="text_to_video">文生视频</option>
+                <option value="text_to_audio">文生语音</option>
+              </select>
+
+              <label>Prompt</label>
+              <textarea name="prompt" rows="4" required placeholder="输入你的创作描述"></textarea>
+
+              <div id="imageInputBox" class="hidden">
+                <label>图生图输入图片</label>
+                <input name="inputImage" type="file" accept="image/*" />
+              </div>
+
+              <button type="submit">提交生成</button>
+            </form>
+            <p id="generateMsg" class="hint"></p>
+          </div>
+
+          <div class="card">
+            <h3>积分规则</h3>
+            <ul id="costList" class="list"></ul>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card wide">
+            <h3>最近生成记录</h3>
+            <div id="historyList" class="history"></div>
+          </div>
+          <div class="card wide">
+            <h3>积分流水</h3>
+            <div id="ledgerList" class="history"></div>
+          </div>
+        </div>
+      </section>
+
+      <p id="globalMsg" class="global-msg"></p>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

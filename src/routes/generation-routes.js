@@ -1,0 +1,70 @@
+const express = require('express');
+const multer = require('multer');
+const { requireAuth } = require('../middleware/auth');
+const { validateGenerationInput } = require('../utils/validators');
+const { AppError } = require('../utils/errors');
+const { submitGeneration, listJobs } = require('../services/generation-service');
+
+const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+router.post('/submit', requireAuth, async (req, res, next) => {
+  try {
+    const payload = {
+      capability: req.body.capability,
+      prompt: req.body.prompt,
+      inputImageBase64: req.body.inputImageBase64,
+    };
+
+    const error = validateGenerationInput(payload);
+    if (error) throw new AppError(error, 400, 'INVALID_GENERATION_INPUT');
+
+    const result = await submitGeneration({
+      userId: req.auth.userId,
+      capability: payload.capability,
+      prompt: payload.prompt,
+      inputImageBase64: payload.inputImageBase64,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/submit-with-file', requireAuth, upload.single('inputImage'), async (req, res, next) => {
+  try {
+    const capability = req.body.capability;
+    const prompt = req.body.prompt;
+    const inputImageBase64 = req.file ? req.file.buffer.toString('base64') : null;
+
+    const payload = { capability, prompt, inputImageBase64 };
+    const error = validateGenerationInput(payload);
+    if (error) throw new AppError(error, 400, 'INVALID_GENERATION_INPUT');
+
+    const result = await submitGeneration({
+      userId: req.auth.userId,
+      capability,
+      prompt,
+      inputImageBase64,
+    });
+
+    res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/history', requireAuth, async (req, res, next) => {
+  try {
+    const rows = await listJobs(req.auth.userId, req.query.limit);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;
