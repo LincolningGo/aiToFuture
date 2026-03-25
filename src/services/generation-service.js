@@ -6,6 +6,10 @@ const { pool } = require('../db/mysql');
 const { AppError } = require('../utils/errors');
 const { generateContent } = require('./provider/minimax-adapter');
 
+const QUEUE_CONCURRENCY = Math.max(1, Number(process.env.GENERATION_QUEUE_CONCURRENCY || 2));
+const generationQueue = [];
+let activeWorkers = 0;
+
 function normalizeBase64(input) {
   if (!input) return null;
   const stripped = input.replace(/^data:.*;base64,/, '');
@@ -72,7 +76,7 @@ async function deductPointsAndCreateJob({ userId, capability, model, prompt, cos
     const [jobResult] = await conn.query(
       `INSERT INTO generation_jobs
        (job_uuid, user_id, model_id, capability, provider, model_code, model_name, prompt_text, input_image_path, status, cost_points)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)`,
       [
         jobUuid,
         userId,
@@ -137,6 +141,10 @@ async function refundPoints({ userId, jobUuid, costPoints }) {
   }
 }
 
+async function markProcessing(jobUuid) {
+  await pool.query('UPDATE generation_jobs SET status = ?, error_message = NULL WHERE job_uuid = ?', ['processing', jobUuid]);
+}
+
 async function markFailed(jobUuid, message) {
   await pool.query('UPDATE generation_jobs SET status = ?, error_message = ? WHERE job_uuid = ?', [
     'failed',
@@ -171,6 +179,40 @@ async function persistOutput({ userId, jobId, jobUuid, output }) {
   };
 }
 
+function enqueueGenerationTask(task) {
+  generationQueue.push(task);
+  pumpQueue();
+}
+
+function pumpQueue() {
+  while (activeWorkers < QUEUE_CONCURRENCY && generationQueue.length > 0) {
+    const task = generationQueue.shift();
+    activeWorkers += 1;
+    void processGenerationTask(task).finally(() => {
+      activeWorkers -= 1;
+      pumpQueue();
+    });
+  }
+}
+
+async function processGenerationTask(task) {
+  const { userId, jobId, jobUuid, costPoints, providerPayload } = task;
+  try {
+    await markProcessing(jobUuid);
+    const output = await generateContent(providerPayload);
+    await persistOutput({
+      userId,
+      jobId,
+      jobUuid,
+      output,
+    });
+  } catch (err) {
+    await markFailed(jobUuid, err.message || 'Generation failed');
+    await refundPoints({ userId, jobUuid, costPoints });
+    console.error('[GEN_QUEUE_JOB_ERROR]', { jobUuid, capability: providerPayload.capability }, err);
+  }
+}
+
 async function submitGeneration({ userId, capability, prompt, modelCode, inputImageBase64 }) {
   const inputImageBuffer = normalizeBase64(inputImageBase64);
   let inputImagePath = null;
@@ -203,41 +245,36 @@ async function submitGeneration({ userId, capability, prompt, modelCode, inputIm
     inputImagePath,
   });
 
-  try {
-    const output = await generateContent({
-      capability,
-      prompt,
-      inputImageBuffer,
-      modelCode: model.model_code,
-      modelProvider: model.provider,
-      inputImagePublicUrl,
-    });
+  const providerPayload = {
+    capability,
+    prompt,
+    inputImageBuffer,
+    modelCode: model.model_code,
+    modelProvider: model.provider,
+    inputImagePublicUrl,
+  };
 
-    const persisted = await persistOutput({
-      userId,
-      jobId,
-      jobUuid,
-      output,
-    });
+  enqueueGenerationTask({
+    userId,
+    jobId,
+    jobUuid,
+    costPoints,
+    providerPayload,
+  });
 
-    return {
-      jobUuid,
-      capability,
-      model: {
-        id: model.id,
-        code: model.model_code,
-        name: model.model_name,
-        provider: model.provider,
-      },
-      status: 'completed',
-      costPoints,
-      output: persisted,
-    };
-  } catch (err) {
-    await markFailed(jobUuid, err.message || 'Generation failed');
-    await refundPoints({ userId, jobUuid, costPoints });
-    throw err;
-  }
+  return {
+    jobUuid,
+    capability,
+    model: {
+      id: model.id,
+      code: model.model_code,
+      name: model.model_name,
+      provider: model.provider,
+    },
+    status: 'queued',
+    costPoints,
+    output: null,
+  };
 }
 
 async function listJobs(userId, limit = 20) {

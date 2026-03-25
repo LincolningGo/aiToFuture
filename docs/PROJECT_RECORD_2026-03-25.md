@@ -81,3 +81,18 @@
 - 增加管理员权限中间件（如 `requireRole('super_admin')`）与后台管理接口。
 - 增加模型管理页面（启停模型、默认模型切换、单模型计费调整）。
 - 增加前端 E2E 回归测试（登录、提交、未登录拦截、管理员权限校验）。
+
+## 2026-03-25 补充（异步任务队列）
+- 需求确认：所有生成能力（文生图、图生图、文生视频、文生语音）统一改为“提交即入队，异步出结果”。
+- 后端实现：
+  - `submitGeneration` 改为立即返回 `status=queued`。
+  - 新增内存 worker 队列并发执行（默认并发 2，可通过 `GENERATION_QUEUE_CONCURRENCY` 调整）。
+  - 状态流转：`queued -> processing -> completed/failed`。
+  - 失败自动退还积分并记录流水。
+- 前端实现：
+  - 生成提交成功后不再宣称“立即完成”，改为“已进入队列”。
+  - 历史记录存在 `queued/processing` 时自动轮询刷新，异步获取最新状态与产物链接。
+  - 网络层对非 JSON 响应容错，避免直接提示“服务返回格式异常”。
+- 配置优化：
+  - MiniMax API 基址统一为 `https://api.minimaxi.com`。
+  - 视频轮询默认上限提升到 120 次（`MINIMAX_VIDEO_POLL_MAX_ATTEMPTS`），减少长任务误判超时。

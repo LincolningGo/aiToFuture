@@ -30,6 +30,8 @@ const state = {
   modelsByCapability: {},
   ui: {
     authOpen: false,
+    jobPollTimer: null,
+    jobPollBusy: false,
   },
 };
 
@@ -88,18 +90,51 @@ async function api(path, options = {}) {
     ...options,
   });
 
-  let data;
+  const raw = await response.text();
+  let data = null;
   try {
-    data = await response.json();
+    data = JSON.parse(raw);
   } catch (_err) {
-    throw new Error('服务返回格式异常');
+    const status = response.status || 0;
+    throw new Error('服务暂时不可用(HTTP ' + status + ')，请稍后重试');
   }
 
   if (response.ok === false || data.success === false) {
-    throw new Error(data?.error?.message || 'Request failed');
+    throw new Error(data?.error?.message || ('Request failed (HTTP ' + response.status + ')'));
   }
 
   return data.data;
+}
+
+const JOB_POLL_INTERVAL_MS = 5000;
+
+function stopJobPolling() {
+  if (state.ui.jobPollTimer) {
+    clearInterval(state.ui.jobPollTimer);
+    state.ui.jobPollTimer = null;
+  }
+}
+
+function ensureJobPolling(enabled) {
+  if (!enabled || state.user === null) {
+    stopJobPolling();
+    return;
+  }
+
+  if (state.ui.jobPollTimer) return;
+
+  state.ui.jobPollTimer = setInterval(async () => {
+    if (state.ui.jobPollBusy || state.user === null) return;
+    state.ui.jobPollBusy = true;
+    try {
+      await refreshUserSnapshot();
+      await Promise.all([refreshHistory(), refreshLedger()]);
+    } catch (_err) {
+      // ignore polling errors and retry next tick
+    } finally {
+      state.ui.jobPollBusy = false;
+    }
+  }, JOB_POLL_INTERVAL_MS);
 }
 
 function showTab(tab) {
@@ -117,6 +152,7 @@ function openAuthPanel(tab = 'login', msg = '') {
 
 function closeAuthPanel() {
   state.ui.authOpen = false;
+  stopJobPolling();
   renderAuthState();
 }
 
@@ -300,17 +336,23 @@ async function refreshModels(preferredModelCode) {
   }
 }
 
+async function refreshUserSnapshot() {
+  const data = await api('/api/user/me');
+  state.user = data.user;
+  state.costs = data.costs || [];
+  renderAuthState();
+  return data;
+}
+
 async function refreshMe() {
   try {
-    const data = await api('/api/user/me');
-    state.user = data.user;
-    state.costs = data.costs || [];
+    await refreshUserSnapshot();
     state.ui.authOpen = false;
-    renderAuthState();
     await Promise.all([refreshHistory(), refreshLedger(), refreshModels()]);
     renderQuickPrompts();
     updatePromptCounter();
   } catch (_err) {
+    stopJobPolling();
     state.user = null;
     state.costs = [];
     state.models = [];
@@ -324,6 +366,7 @@ async function refreshMe() {
 
 async function refreshHistory() {
   if (state.user === null) {
+    stopJobPolling();
     els.historyList.innerHTML = '<p class="hint">登录后查看你的生成历史。</p>';
     return;
   }
@@ -332,6 +375,7 @@ async function refreshHistory() {
   els.historyList.innerHTML = '';
 
   if (rows.length === 0) {
+    ensureJobPolling(false);
     els.historyList.innerHTML = '<p class="hint">暂无记录</p>';
     return;
   }
@@ -363,6 +407,12 @@ async function refreshHistory() {
 
     els.historyList.appendChild(div);
   });
+
+  const hasRunningJob = rows.some((row) => {
+    const status = String(row.status || '').toLowerCase();
+    return status === 'queued' || status === 'processing';
+  });
+  ensureJobPolling(hasRunningJob);
 }
 
 async function refreshLedger() {
@@ -561,7 +611,11 @@ els.generateForm.addEventListener('submit', async (event) => {
     }
 
     const modelName = result?.model?.name || result?.model?.code || payload.modelCode || '默认模型';
-    setGenerateMsg(`生成完成，已使用模型: ${modelName}`);
+    if (result?.status === 'queued' || result?.status === 'processing') {
+      setGenerateMsg('任务已进入队列，正在异步生成中。可在历史记录查看最新状态。模型: ' + modelName);
+    } else {
+      setGenerateMsg('生成完成，已使用模型: ' + modelName);
+    }
 
     await refreshMe();
     els.generateForm.reset();

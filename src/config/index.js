@@ -28,7 +28,7 @@ const config = {
   minimaxT2aModel: process.env.MINIMAX_T2A_MODEL || 'speech-02-hd',
   minimaxT2aVoiceId: process.env.MINIMAX_T2A_VOICE_ID || 'male-qn-qingse',
   minimaxVideoPollIntervalMs: toInt(process.env.MINIMAX_VIDEO_POLL_INTERVAL_MS, 5000),
-  minimaxVideoPollMaxAttempts: toInt(process.env.MINIMAX_VIDEO_POLL_MAX_ATTEMPTS, 36),
+  minimaxVideoPollMaxAttempts: toInt(process.env.MINIMAX_VIDEO_POLL_MAX_ATTEMPTS, 120),
   defaultRegisterPoints: toInt(process.env.DEFAULT_REGISTER_POINTS, 100),
   costs: {
     text_to_image: toInt(process.env.COST_TEXT_TO_IMAGE, 10),
