@@ -776,6 +776,16 @@ button.compact {
   z-index: 60;
 }
 
+#previewModal {
+  z-index: 140;
+}
+
+#pointsModal,
+#roleModal,
+#adminDetailModal {
+  z-index: 80;
+}
+
 .preview-backdrop {
   position: absolute;
   inset: 0;
@@ -892,6 +902,8 @@ button.compact {
 .detail-output-preview audio {
   width: 100%;
   display: block;
+  padding: 10px;
+  box-sizing: border-box;
 }
 
 .detail-output-preview.text pre {

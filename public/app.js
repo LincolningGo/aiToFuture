@@ -45,6 +45,8 @@ const PROMPT_MAX_LENGTHS = {
   music_generation: 2000,
 };
 
+const protectedMediaCache = new Map();
+
 const state = {
   user: null,
   costs: [],
@@ -362,6 +364,60 @@ function getSafeMediaUrl(input) {
     .replace(/>/g, '%3E');
 }
 
+async function getProtectedMediaObjectUrl(mediaUrl) {
+  if (!mediaUrl) return '';
+  if (protectedMediaCache.has(mediaUrl)) {
+    return protectedMediaCache.get(mediaUrl);
+  }
+
+  const response = await fetch(mediaUrl, {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    throw new Error(`媒体加载失败(HTTP ${response.status})`);
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  protectedMediaCache.set(mediaUrl, objectUrl);
+  return objectUrl;
+}
+
+async function hydrateProtectedPreview(container, row) {
+  if (!container || !row) return;
+  const mediaUrl = getSafeMediaUrl(row.public_url);
+  if (!mediaUrl) {
+    container.innerHTML = '<div class="hint compact">暂无预览</div>';
+    return;
+  }
+
+  container.innerHTML = '<div class="hint compact">加载预览中...</div>';
+
+  try {
+    const objectUrl = await getProtectedMediaObjectUrl(mediaUrl);
+    if (!container.isConnected) return;
+
+    if (row.file_type === 'image') {
+      container.innerHTML = `<img src="${objectUrl}" alt="result preview" />`;
+      return;
+    }
+    if (row.file_type === 'video') {
+      container.innerHTML = `<video controls preload="metadata" src="${objectUrl}"></video>`;
+      return;
+    }
+    if (row.file_type === 'audio') {
+      container.innerHTML = `<audio controls preload="metadata" src="${objectUrl}"></audio>`;
+      return;
+    }
+
+    container.innerHTML = '<div class="hint compact">暂不支持该类型预览</div>';
+  } catch (_err) {
+    if (!container.isConnected) return;
+    container.innerHTML = '<div class="hint compact">预览加载失败</div>';
+  }
+}
+
 async function api(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   let requestPath = path;
@@ -647,11 +703,11 @@ function renderAdminDetail(data) {
           let previewHtml = '';
           let actionHtml = '';
           if (row.file_type === 'image' && mediaUrl) {
-            previewHtml = `<div class="detail-output-preview"><img src="${mediaUrl}" alt="result preview" /></div>`;
+            previewHtml = `<div class="detail-output-preview" data-preview-index="${index}"><div class="hint compact">加载预览中...</div></div>`;
           } else if (row.file_type === 'video' && mediaUrl) {
-            previewHtml = `<div class="detail-output-preview"><video controls preload="metadata" src="${mediaUrl}"></video></div>`;
+            previewHtml = `<div class="detail-output-preview" data-preview-index="${index}"><div class="hint compact">加载预览中...</div></div>`;
           } else if (row.file_type === 'audio' && mediaUrl) {
-            previewHtml = `<div class="detail-output-preview"><audio controls preload="metadata" src="${mediaUrl}"></audio></div>`;
+            previewHtml = `<div class="detail-output-preview" data-preview-index="${index}"><div class="hint compact">加载预览中...</div></div>`;
           } else if (row.file_type === 'text' && row.output_preview_text) {
             previewHtml = `<div class="detail-output-preview text"><pre>${escapeHtml(row.output_preview_text)}</pre></div>`;
           }
@@ -739,6 +795,14 @@ function renderAdminDetail(data) {
       if (row) openPreview(row);
     });
   });
+
+  els.adminDetailBody.querySelectorAll('.detail-output-preview[data-preview-index]').forEach((container) => {
+    const index = Number.parseInt(container.dataset.previewIndex, 10);
+    const row = state.ui.adminDetailGenerations[index];
+    if (row) {
+      void hydrateProtectedPreview(container, row);
+    }
+  });
 }
 
 async function openAdminDetailModal(userId) {
@@ -754,25 +818,38 @@ async function openAdminDetailModal(userId) {
   }
 }
 
-function openPreview(row) {
+async function openPreview(row) {
   const title = `${CAPABILITY_LABELS[row.capability] || row.capability} · ${row.model_name || row.model_code || '-'}`;
   els.previewTitle.textContent = title;
   const mediaUrl = getSafeMediaUrl(row.public_url);
+  els.previewModal.classList.remove('hidden');
+  els.previewBody.innerHTML = '<p class="hint">加载预览中...</p>';
 
-  if (row.file_type === 'image' && mediaUrl) {
-    els.previewBody.innerHTML = `<img src="${mediaUrl}" alt="preview" />`;
-  } else if (row.file_type === 'video' && mediaUrl) {
-    els.previewBody.innerHTML = `<video controls autoplay src="${mediaUrl}"></video>`;
-  } else if (row.file_type === 'audio' && mediaUrl) {
-    els.previewBody.innerHTML = `<audio controls autoplay src="${mediaUrl}"></audio>`;
-  } else if (row.file_type === 'text') {
+  if (row.file_type === 'text') {
     const previewText = row.output_preview_text || '文本结果';
     els.previewBody.innerHTML = `<pre>${escapeHtml(previewText)}</pre>`;
-  } else {
-    els.previewBody.innerHTML = '<p class="hint">暂无可预览内容</p>';
+    return;
   }
 
-  els.previewModal.classList.remove('hidden');
+  if (!mediaUrl) {
+    els.previewBody.innerHTML = '<p class="hint">暂无可预览内容</p>';
+    return;
+  }
+
+  try {
+    const objectUrl = await getProtectedMediaObjectUrl(mediaUrl);
+    if (row.file_type === 'image') {
+      els.previewBody.innerHTML = `<img src="${objectUrl}" alt="preview" />`;
+    } else if (row.file_type === 'video') {
+      els.previewBody.innerHTML = `<video controls autoplay src="${objectUrl}"></video>`;
+    } else if (row.file_type === 'audio') {
+      els.previewBody.innerHTML = `<audio controls autoplay src="${objectUrl}"></audio>`;
+    } else {
+      els.previewBody.innerHTML = '<p class="hint">暂无可预览内容</p>';
+    }
+  } catch (_err) {
+    els.previewBody.innerHTML = '<p class="hint">预览加载失败，请稍后重试</p>';
+  }
 }
 
 function closePreview() {
