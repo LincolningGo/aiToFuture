@@ -10,14 +10,20 @@ const router = express.Router();
 router.get('/*', requireAuth, async (req, res, next) => {
   try {
     const requestPath = `/generated/${req.params[0]}`;
-    const [rows] = await pool.query(
-      `SELECT o.local_path
-       FROM generation_outputs o
-       JOIN generation_jobs j ON j.id = o.job_id
-       WHERE o.public_url = ? AND j.user_id = ?
-       LIMIT 1`,
-      [requestPath, req.auth.userId],
-    );
+    const isSuperAdmin = req.auth?.role === 'super_admin';
+    const sql = isSuperAdmin
+      ? `SELECT o.local_path
+         FROM generation_outputs o
+         JOIN generation_jobs j ON j.id = o.job_id
+         WHERE o.public_url = ?
+         LIMIT 1`
+      : `SELECT o.local_path
+         FROM generation_outputs o
+         JOIN generation_jobs j ON j.id = o.job_id
+         WHERE o.public_url = ? AND j.user_id = ?
+         LIMIT 1`;
+    const params = isSuperAdmin ? [requestPath] : [requestPath, req.auth.userId];
+    const [rows] = await pool.query(sql, params);
 
     if (rows.length === 0) {
       return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'File not found' } });

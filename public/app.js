@@ -641,6 +641,16 @@ function renderAdminDetail(data) {
     ? generationItems
         .map((row) => {
           const mediaUrl = getSafeMediaUrl(row.public_url);
+          let previewHtml = '';
+          if (row.file_type === 'image' && mediaUrl) {
+            previewHtml = `<div class="detail-output-preview"><img src="${mediaUrl}" alt="result preview" /></div>`;
+          } else if (row.file_type === 'video' && mediaUrl) {
+            previewHtml = `<div class="detail-output-preview"><video controls preload="metadata" src="${mediaUrl}"></video></div>`;
+          } else if (row.file_type === 'audio' && mediaUrl) {
+            previewHtml = `<div class="detail-output-preview"><audio controls preload="metadata" src="${mediaUrl}"></audio></div>`;
+          } else if (row.file_type === 'text' && row.output_preview_text) {
+            previewHtml = `<div class="detail-output-preview text"><pre>${escapeHtml(row.output_preview_text)}</pre></div>`;
+          }
           const previewLink = mediaUrl
             ? `<a class="detail-link" href="${mediaUrl}" target="_blank" rel="noreferrer">查看结果</a>`
             : '';
@@ -649,6 +659,7 @@ function renderAdminDetail(data) {
               <p><strong>${escapeHtml(CAPABILITY_LABELS[row.capability] || row.capability)}</strong> · ${escapeHtml(row.model_name || row.model_code || '-')}</p>
               <p>状态：${escapeHtml(row.status)} · 消耗：${escapeHtml(row.cost_points)} · ${formatTime(row.created_at)}</p>
               <p class="detail-prompt">${escapeHtml(row.prompt_text || '')}</p>
+              ${previewHtml}
               ${previewLink}
             </div>
           `;
