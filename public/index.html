@@ -220,56 +220,103 @@
 	            <div class="card wide">
 	              <div class="section-head admin-head">
 	                <div>
-	                  <h3>用户管理</h3>
+	                  <h3>超级管理员后台</h3>
 	                  <p id="adminSummary" class="hint compact"></p>
 	                </div>
-	                <button type="button" id="adminRefreshBtn" class="ghost compact">刷新用户</button>
-	              </div>
-
-	              <div class="admin-stats" id="adminStats">
-	                <div class="stat-card">
-	                  <span class="stat-label">总用户</span>
-	                  <strong id="adminStatTotal">0</strong>
-	                </div>
-	                <div class="stat-card">
-	                  <span class="stat-label">启用中</span>
-	                  <strong id="adminStatActive">0</strong>
-	                </div>
-	                <div class="stat-card">
-	                  <span class="stat-label">已禁用</span>
-	                  <strong id="adminStatDisabled">0</strong>
-	                </div>
-	                <div class="stat-card">
-	                  <span class="stat-label">超管</span>
-	                  <strong id="adminStatSuper">0</strong>
+	                <div class="workspace-nav admin-subnav">
+	                  <button id="adminUsersTabBtn" class="nav-chip active" type="button">用户管理</button>
+	                  <button id="adminLogsTabBtn" class="nav-chip" type="button">操作日志</button>
 	                </div>
 	              </div>
 
-	              <div class="admin-toolbar">
-	                <input id="adminSearchInput" type="search" placeholder="搜索用户ID / 用户名 / 邮箱" />
-	                <select id="adminRoleFilter">
-	                  <option value="">全部角色</option>
-	                  <option value="super_admin">超级管理员</option>
-	                  <option value="user">普通用户</option>
-	                </select>
-	                <select id="adminStatusFilter">
-	                  <option value="">全部状态</option>
-	                  <option value="active">启用</option>
-	                  <option value="disabled">禁用</option>
-	                </select>
-	                <button type="button" id="adminSearchBtn" class="ghost compact">查询</button>
-	              </div>
-
-	              <div id="adminUsersList" class="admin-users-list"></div>
-
-	              <div class="section-foot">
-	                <p id="adminUsersHint" class="hint compact"></p>
-	                <div class="pager">
-	                  <button type="button" id="adminUsersPrevBtn" class="ghost compact">上一页</button>
-	                  <span id="adminUsersPageInfo" class="pager-info">第 1 / 1 页</span>
-	                  <button type="button" id="adminUsersNextBtn" class="ghost compact">下一页</button>
+	              <section id="adminUsersSection">
+	                <div class="section-head admin-section-head">
+	                  <div>
+	                    <h3>用户管理</h3>
+	                    <p class="hint compact">维护账号状态、角色与积分。</p>
+	                  </div>
+	                  <button type="button" id="adminRefreshBtn" class="ghost compact">刷新用户</button>
 	                </div>
-	              </div>
+
+	                <div class="admin-stats" id="adminStats">
+	                  <div class="stat-card">
+	                    <span class="stat-label">总用户</span>
+	                    <strong id="adminStatTotal">0</strong>
+	                  </div>
+	                  <div class="stat-card">
+	                    <span class="stat-label">启用中</span>
+	                    <strong id="adminStatActive">0</strong>
+	                  </div>
+	                  <div class="stat-card">
+	                    <span class="stat-label">已禁用</span>
+	                    <strong id="adminStatDisabled">0</strong>
+	                  </div>
+	                  <div class="stat-card">
+	                    <span class="stat-label">超管</span>
+	                    <strong id="adminStatSuper">0</strong>
+	                  </div>
+	                </div>
+
+	                <div class="admin-toolbar">
+	                  <input id="adminSearchInput" type="search" placeholder="搜索用户ID / 用户名 / 邮箱" />
+	                  <select id="adminRoleFilter">
+	                    <option value="">全部角色</option>
+	                    <option value="super_admin">超级管理员</option>
+	                    <option value="user">普通用户</option>
+	                  </select>
+	                  <select id="adminStatusFilter">
+	                    <option value="">全部状态</option>
+	                    <option value="active">启用</option>
+	                    <option value="disabled">禁用</option>
+	                  </select>
+	                  <button type="button" id="adminSearchBtn" class="ghost compact">查询</button>
+	                </div>
+
+	                <div id="adminUsersList" class="admin-users-list"></div>
+
+	                <div class="section-foot">
+	                  <p id="adminUsersHint" class="hint compact"></p>
+	                  <div class="pager">
+	                    <button type="button" id="adminUsersPrevBtn" class="ghost compact">上一页</button>
+	                    <span id="adminUsersPageInfo" class="pager-info">第 1 / 1 页</span>
+	                    <button type="button" id="adminUsersNextBtn" class="ghost compact">下一页</button>
+	                  </div>
+	                </div>
+	              </section>
+
+	              <section id="adminLogsSection" class="hidden">
+	                <div class="section-head admin-section-head">
+	                  <div>
+	                    <h3>操作日志</h3>
+	                    <p class="hint compact">追踪超级管理员的关键操作记录。</p>
+	                  </div>
+	                  <button type="button" id="adminLogsRefreshBtn" class="ghost compact">刷新日志</button>
+	                </div>
+
+	                <div class="admin-toolbar admin-log-toolbar">
+	                  <input id="adminLogSearchInput" type="search" placeholder="搜索日志ID / 操作人 / 目标用户 / 说明" />
+	                  <select id="adminLogActionFilter">
+	                    <option value="">全部类型</option>
+	                    <option value="grant_points">发积分</option>
+	                    <option value="deduct_points">扣积分</option>
+	                    <option value="enable_user">启用用户</option>
+	                    <option value="disable_user">禁用用户</option>
+	                    <option value="change_role">修改角色</option>
+	                  </select>
+	                  <button type="button" id="adminLogSearchBtn" class="ghost compact">查询</button>
+	                </div>
+
+	                <div id="adminLogsList" class="admin-logs-list"></div>
+
+	                <div class="section-foot">
+	                  <p id="adminLogsHint" class="hint compact"></p>
+	                  <div class="pager">
+	                    <button type="button" id="adminLogsPrevBtn" class="ghost compact">上一页</button>
+	                    <span id="adminLogsPageInfo" class="pager-info">第 1 / 1 页</span>
+	                    <button type="button" id="adminLogsNextBtn" class="ghost compact">下一页</button>
+	                  </div>
+	                </div>
+	              </section>
 	            </div>
 	          </div>
 	        </section>
@@ -328,6 +375,30 @@
 	      </div>
 	    </div>
 
-	    <script src="/app.js?v=20260326f"></script>
+	    <div id="roleModal" class="preview-modal hidden">
+	      <div class="preview-backdrop" id="roleBackdrop"></div>
+	      <div class="preview-dialog admin-dialog">
+	        <div class="preview-head">
+	          <h3 id="roleModalTitle">修改角色</h3>
+	          <button id="roleCloseBtn" class="ghost compact" type="button">关闭</button>
+	        </div>
+	        <p id="roleTargetText" class="hint compact"></p>
+	        <form id="roleForm" class="admin-points-form">
+	          <label>目标角色</label>
+	          <select id="roleSelect" name="role">
+	            <option value="user">普通用户</option>
+	            <option value="super_admin">超级管理员</option>
+	          </select>
+	          <label>原因说明（可选）</label>
+	          <textarea id="roleReasonInput" name="reason" rows="4" maxlength="255" placeholder="例如：升级运维同学为超管"></textarea>
+	          <p id="roleFormMsg" class="form-msg hidden"></p>
+	          <div class="form-actions inline-actions">
+	            <button id="roleSubmitBtn" type="submit">确认提交</button>
+	          </div>
+	        </form>
+	      </div>
+	    </div>
+
+	    <script src="/app.js?v=20260326g"></script>
   </body>
 </html>

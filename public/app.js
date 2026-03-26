@@ -16,6 +16,14 @@ const DEFAULT_COSTS = {
   music_generation: 20,
 };
 
+const ADMIN_ACTION_LABELS = {
+  grant_points: '发积分',
+  deduct_points: '扣积分',
+  enable_user: '启用用户',
+  disable_user: '禁用用户',
+  change_role: '修改角色',
+};
+
 const QUICK_PROMPTS = {
   text_to_image: [
     '赛博城市夜景，电影级灯光，35mm，超细节',
@@ -70,14 +78,27 @@ const state = {
     },
     items: [],
   },
+  adminLogs: {
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+    query: '',
+    actionType: '',
+    items: [],
+  },
   ui: {
     authOpen: false,
     jobPollTimer: null,
     jobPollBusy: false,
     view: 'console',
+    adminSection: 'users',
     pointsModalOpen: false,
     pointsTargetUser: null,
+    roleModalOpen: false,
+    roleTargetUser: null,
     adminDetailOpen: false,
+    adminDetailUserId: null,
   },
 };
 
@@ -94,6 +115,10 @@ const els = {
   adminNavBtn: document.getElementById('adminNavBtn'),
   consoleView: document.getElementById('consoleView'),
   adminView: document.getElementById('adminView'),
+  adminUsersTabBtn: document.getElementById('adminUsersTabBtn'),
+  adminLogsTabBtn: document.getElementById('adminLogsTabBtn'),
+  adminUsersSection: document.getElementById('adminUsersSection'),
+  adminLogsSection: document.getElementById('adminLogsSection'),
   loginForm: document.getElementById('loginForm'),
   registerForm: document.getElementById('registerForm'),
   loginSubmitBtn: document.getElementById('loginSubmitBtn'),
@@ -139,6 +164,15 @@ const els = {
   adminUsersPrevBtn: document.getElementById('adminUsersPrevBtn'),
   adminUsersNextBtn: document.getElementById('adminUsersNextBtn'),
   adminUsersPageInfo: document.getElementById('adminUsersPageInfo'),
+  adminLogSearchInput: document.getElementById('adminLogSearchInput'),
+  adminLogActionFilter: document.getElementById('adminLogActionFilter'),
+  adminLogSearchBtn: document.getElementById('adminLogSearchBtn'),
+  adminLogsRefreshBtn: document.getElementById('adminLogsRefreshBtn'),
+  adminLogsList: document.getElementById('adminLogsList'),
+  adminLogsHint: document.getElementById('adminLogsHint'),
+  adminLogsPrevBtn: document.getElementById('adminLogsPrevBtn'),
+  adminLogsNextBtn: document.getElementById('adminLogsNextBtn'),
+  adminLogsPageInfo: document.getElementById('adminLogsPageInfo'),
   previewModal: document.getElementById('previewModal'),
   previewBackdrop: document.getElementById('previewBackdrop'),
   previewCloseBtn: document.getElementById('previewCloseBtn'),
@@ -160,6 +194,16 @@ const els = {
   adminDetailCloseBtn: document.getElementById('adminDetailCloseBtn'),
   adminDetailTitle: document.getElementById('adminDetailTitle'),
   adminDetailBody: document.getElementById('adminDetailBody'),
+  roleModal: document.getElementById('roleModal'),
+  roleBackdrop: document.getElementById('roleBackdrop'),
+  roleCloseBtn: document.getElementById('roleCloseBtn'),
+  roleModalTitle: document.getElementById('roleModalTitle'),
+  roleTargetText: document.getElementById('roleTargetText'),
+  roleForm: document.getElementById('roleForm'),
+  roleSelect: document.getElementById('roleSelect'),
+  roleReasonInput: document.getElementById('roleReasonInput'),
+  roleFormMsg: document.getElementById('roleFormMsg'),
+  roleSubmitBtn: document.getElementById('roleSubmitBtn'),
 };
 
 function setGlobalMsg(msg) {
@@ -219,6 +263,37 @@ function setPointsFormMsg(msg, type = 'error') {
   els.pointsFormMsg.textContent = normalized;
   els.pointsFormMsg.classList.toggle('hidden', normalized.length === 0);
   els.pointsFormMsg.dataset.type = normalized.length === 0 ? '' : type;
+}
+
+function setRoleFormMsg(msg, type = 'error') {
+  const normalized = String(msg || '').trim();
+  els.roleFormMsg.textContent = normalized;
+  els.roleFormMsg.classList.toggle('hidden', normalized.length === 0);
+  els.roleFormMsg.dataset.type = normalized.length === 0 ? '' : type;
+}
+
+function getRoleLabel(role) {
+  return role === 'super_admin' ? '超级管理员' : '普通用户';
+}
+
+function getAdminActionLabel(actionType) {
+  return ADMIN_ACTION_LABELS[actionType] || actionType || '-';
+}
+
+function describeAdminAction(row) {
+  if (!row) return '-';
+  if (row.action_type === 'grant_points' || row.action_type === 'deduct_points') {
+    const delta = Number(row.change_amount || 0);
+    const deltaText = `${delta > 0 ? '+' : ''}${delta}`;
+    return `${deltaText} 积分 ｜ ${row.before_value ?? '-'} → ${row.after_value ?? '-'}`;
+  }
+  if (row.action_type === 'enable_user' || row.action_type === 'disable_user') {
+    return `${row.before_value === 1 ? '启用' : '禁用'} → ${row.after_value === 1 ? '启用' : '禁用'}`;
+  }
+  if (row.action_type === 'change_role') {
+    return row.note || '角色已调整';
+  }
+  return row.note || '-';
 }
 
 function getSafeMediaUrl(input) {
@@ -346,6 +421,7 @@ function renderViewState() {
   const canAdmin = isSuperAdmin();
   if (!canAdmin) {
     state.ui.view = 'console';
+    state.ui.adminSection = 'users';
   }
 
   els.workspaceNav.classList.toggle('hidden', !canAdmin);
@@ -353,6 +429,28 @@ function renderViewState() {
   els.adminNavBtn.classList.toggle('active', state.ui.view === 'admin');
   els.consoleView.classList.toggle('hidden', state.ui.view !== 'console');
   els.adminView.classList.toggle('hidden', state.ui.view !== 'admin' || !canAdmin);
+  renderAdminSectionState();
+}
+
+function renderAdminSectionState() {
+  const showUsers = isSuperAdmin() && state.ui.view === 'admin' && state.ui.adminSection === 'users';
+  const showLogs = isSuperAdmin() && state.ui.view === 'admin' && state.ui.adminSection === 'logs';
+
+  els.adminUsersTabBtn.classList.toggle('active', showUsers);
+  els.adminLogsTabBtn.classList.toggle('active', showLogs);
+  els.adminUsersSection.classList.toggle('hidden', !showUsers);
+  els.adminLogsSection.classList.toggle('hidden', !showLogs);
+  if (!isSuperAdmin() || state.ui.view !== 'admin') {
+    els.adminSummary.textContent = '';
+  } else if (showUsers) {
+    els.adminSummary.textContent = state.adminUsers.total > 0
+      ? `共 ${state.adminUsers.total} 个匹配用户，当前每页 ${state.adminUsers.limit} 条。`
+      : '暂无匹配用户。';
+  } else if (showLogs) {
+    els.adminSummary.textContent = state.adminLogs.total > 0
+      ? `共 ${state.adminLogs.total} 条日志，当前每页 ${state.adminLogs.limit} 条。`
+      : '暂无匹配日志。';
+  }
 }
 
 function renderAuthState() {
@@ -395,6 +493,13 @@ function renderAdminPagination() {
   els.adminUsersNextBtn.disabled = page >= totalPages || !isSuperAdmin() || total === 0;
 }
 
+function renderAdminLogsPagination() {
+  const { page, totalPages, total } = state.adminLogs;
+  els.adminLogsPageInfo.textContent = `第 ${page} / ${totalPages} 页`;
+  els.adminLogsPrevBtn.disabled = page <= 1 || !isSuperAdmin();
+  els.adminLogsNextBtn.disabled = page >= totalPages || !isSuperAdmin() || total === 0;
+}
+
 function openPointsModal(user, action = 'grant') {
   state.ui.pointsModalOpen = true;
   state.ui.pointsTargetUser = user || null;
@@ -416,8 +521,30 @@ function closePointsModal() {
   els.pointsModal.classList.add('hidden');
 }
 
+function openRoleModal(user) {
+  state.ui.roleModalOpen = true;
+  state.ui.roleTargetUser = user || null;
+  els.roleSelect.value = user?.role || 'user';
+  els.roleReasonInput.value = '';
+  els.roleModalTitle.textContent = '修改角色';
+  els.roleTargetText.textContent = user
+    ? `用户 #${user.id} · ${user.username} · 当前角色 ${getRoleLabel(user.role)}`
+    : '';
+  setRoleFormMsg('');
+  els.roleModal.classList.remove('hidden');
+}
+
+function closeRoleModal() {
+  state.ui.roleModalOpen = false;
+  state.ui.roleTargetUser = null;
+  els.roleReasonInput.value = '';
+  setRoleFormMsg('');
+  els.roleModal.classList.add('hidden');
+}
+
 function closeAdminDetailModal() {
   state.ui.adminDetailOpen = false;
+  state.ui.adminDetailUserId = null;
   els.adminDetailModal.classList.add('hidden');
 }
 
@@ -474,7 +601,7 @@ function renderAdminDetail(data) {
       </div>
       <div class="stat-card">
         <span class="stat-label">角色</span>
-        <strong>${escapeHtml(user.role === 'super_admin' ? '超级管理员' : '普通用户')}</strong>
+        <strong>${escapeHtml(getRoleLabel(user.role))}</strong>
       </div>
       <div class="stat-card">
         <span class="stat-label">当前积分</span>
@@ -515,6 +642,7 @@ function renderAdminDetail(data) {
 
 async function openAdminDetailModal(userId) {
   state.ui.adminDetailOpen = true;
+  state.ui.adminDetailUserId = userId;
   els.adminDetailBody.innerHTML = '<p class="hint">加载中...</p>';
   els.adminDetailModal.classList.remove('hidden');
   try {
@@ -744,6 +872,9 @@ async function refreshMe(options = {}) {
     state.costs = [];
     state.models = [];
     state.modelsByCapability = {};
+    closeAdminDetailModal();
+    closePointsModal();
+    closeRoleModal();
     state.adminUsers = {
       ...state.adminUsers,
       page: 1,
@@ -752,7 +883,17 @@ async function refreshMe(options = {}) {
       items: [],
       summary: { total: 0, activeTotal: 0, disabledTotal: 0, superAdminTotal: 0 },
     };
+    state.adminLogs = {
+      ...state.adminLogs,
+      page: 1,
+      total: 0,
+      totalPages: 1,
+      query: '',
+      actionType: '',
+      items: [],
+    };
     state.ui.view = 'console';
+    state.ui.adminSection = 'users';
     state.history = { ...state.history, page: 1, total: 0, totalPages: 1, hasRunningJobs: false };
     state.ledger = { ...state.ledger, page: 1, total: 0, totalPages: 1 };
     renderAuthState();
@@ -776,7 +917,7 @@ function renderAdminUsers(rows) {
 
   rows.forEach((user) => {
     const item = document.createElement('div');
-    const roleLabel = user.role === 'super_admin' ? '超级管理员' : '普通用户';
+    const roleLabel = getRoleLabel(user.role);
     const statusLabel = user.is_active ? '启用' : '禁用';
     item.className = 'admin-user-row';
     item.innerHTML = `
@@ -800,6 +941,7 @@ function renderAdminUsers(rows) {
       </div>
       <div class="admin-user-actions">
         <button type="button" class="ghost compact admin-view-user">查看</button>
+        <button type="button" class="ghost compact admin-role-change">改角色</button>
         <button type="button" class="ghost compact admin-points-grant">发积分</button>
         <button type="button" class="ghost compact admin-points-deduct">扣积分</button>
         <button type="button" class="ghost compact admin-status-toggle">${user.is_active ? '禁用' : '启用'}</button>
@@ -809,6 +951,7 @@ function renderAdminUsers(rows) {
     item.querySelector('.admin-view-user')?.addEventListener('click', () => {
       void openAdminDetailModal(user.id);
     });
+    item.querySelector('.admin-role-change')?.addEventListener('click', () => openRoleModal(user));
     item.querySelector('.admin-points-grant')?.addEventListener('click', () => openPointsModal(user, 'grant'));
     item.querySelector('.admin-points-deduct')?.addEventListener('click', () => openPointsModal(user, 'deduct'));
     item.querySelector('.admin-status-toggle')?.addEventListener('click', async () => {
@@ -824,6 +967,12 @@ function renderAdminUsers(rows) {
         });
         setGlobalMsg(`已${actionLabel}用户 ${user.username}`);
         await refreshAdminUsers();
+        if (state.ui.adminDetailOpen && state.ui.adminDetailUserId === user.id) {
+          await openAdminDetailModal(user.id);
+        }
+        if (state.ui.adminSection === 'logs') {
+          await refreshAdminLogs();
+        }
       } catch (err) {
         setGlobalMsg(err.message);
       }
@@ -839,6 +988,45 @@ function syncAdminFiltersToInputs() {
   els.adminStatusFilter.value = state.adminUsers.status;
 }
 
+function renderAdminLogs(rows) {
+  els.adminLogsList.innerHTML = '';
+
+  if (!isSuperAdmin()) {
+    els.adminLogsList.innerHTML = '<p class="hint">仅超级管理员可访问</p>';
+    return;
+  }
+
+  if (!rows.length) {
+    els.adminLogsList.innerHTML = '<p class="hint">暂无匹配日志</p>';
+    return;
+  }
+
+  rows.forEach((row) => {
+    const item = document.createElement('div');
+    item.className = 'admin-log-row';
+    item.innerHTML = `
+      <div class="admin-log-topline">
+        <div class="admin-log-title-group">
+          <strong>${escapeHtml(getAdminActionLabel(row.action_type))}</strong>
+          <span class="admin-user-id">#${escapeHtml(row.id)}</span>
+        </div>
+        <span class="status-badge">${escapeHtml(getAdminActionLabel(row.action_type))}</span>
+      </div>
+      <p class="admin-log-meta">操作人：${escapeHtml(row.admin_user?.username || '-')}（#${escapeHtml(row.admin_user?.id || '-')}）</p>
+      <p class="admin-log-meta">目标用户：${escapeHtml(row.target_user?.username || '-')}（#${escapeHtml(row.target_user?.id || '-')}）</p>
+      <p class="admin-log-meta">${escapeHtml(describeAdminAction(row))}</p>
+      ${row.note && row.action_type !== 'change_role' ? `<p class="admin-log-meta">说明：${escapeHtml(row.note)}</p>` : ''}
+      <p class="admin-log-meta">${formatTime(row.created_at)}</p>
+    `;
+    els.adminLogsList.appendChild(item);
+  });
+}
+
+function syncAdminLogFiltersToInputs() {
+  els.adminLogSearchInput.value = state.adminLogs.query;
+  els.adminLogActionFilter.value = state.adminLogs.actionType;
+}
+
 async function refreshAdminUsers(options = {}) {
   if (!isSuperAdmin()) {
     state.adminUsers = {
@@ -850,6 +1038,10 @@ async function refreshAdminUsers(options = {}) {
       summary: { total: 0, activeTotal: 0, disabledTotal: 0, superAdminTotal: 0 },
     };
     els.adminSummary.textContent = '';
+    els.adminStatTotal.textContent = '0';
+    els.adminStatActive.textContent = '0';
+    els.adminStatDisabled.textContent = '0';
+    els.adminStatSuper.textContent = '0';
     renderAdminUsers([]);
     renderAdminPagination();
     return;
@@ -891,15 +1083,60 @@ async function refreshAdminUsers(options = {}) {
   els.adminStatActive.textContent = state.adminUsers.summary.activeTotal;
   els.adminStatDisabled.textContent = state.adminUsers.summary.disabledTotal;
   els.adminStatSuper.textContent = state.adminUsers.summary.superAdminTotal;
-  els.adminSummary.textContent = state.adminUsers.total > 0
-    ? `共 ${state.adminUsers.total} 个匹配用户，当前每页 ${state.adminUsers.limit} 条。`
-    : '暂无匹配用户。';
   els.adminUsersHint.textContent = state.adminUsers.total > 0
     ? '支持搜索用户ID、用户名、邮箱；积分与状态操作实时生效。'
     : '可调整筛选条件后重新查询。';
 
   renderAdminUsers(rows);
   renderAdminPagination();
+  renderAdminSectionState();
+}
+
+async function refreshAdminLogs(options = {}) {
+  if (!isSuperAdmin()) {
+    state.adminLogs = {
+      ...state.adminLogs,
+      page: 1,
+      total: 0,
+      totalPages: 1,
+      items: [],
+    };
+    els.adminLogsHint.textContent = '';
+    renderAdminLogs([]);
+    renderAdminLogsPagination();
+    return;
+  }
+
+  if (typeof options.query === 'string') state.adminLogs.query = options.query.trim();
+  if (typeof options.actionType === 'string') state.adminLogs.actionType = options.actionType.trim();
+  if (options.page) state.adminLogs.page = Math.max(Number(options.page) || 1, 1);
+
+  syncAdminLogFiltersToInputs();
+
+  const queryParams = new URLSearchParams({
+    page: String(state.adminLogs.page),
+    limit: String(state.adminLogs.limit),
+  });
+  if (state.adminLogs.query) queryParams.set('query', state.adminLogs.query);
+  if (state.adminLogs.actionType) queryParams.set('actionType', state.adminLogs.actionType);
+
+  const data = await api(`/api/admin/action-logs?${queryParams.toString()}`);
+  const rows = Array.isArray(data?.items) ? data.items : [];
+  const pagination = data?.pagination || {};
+
+  state.adminLogs.page = Math.max(Number(pagination.page) || state.adminLogs.page, 1);
+  state.adminLogs.limit = Math.max(Number(pagination.limit) || state.adminLogs.limit, 1);
+  state.adminLogs.total = Math.max(Number(pagination.total) || rows.length, 0);
+  state.adminLogs.totalPages = Math.max(Number(pagination.totalPages) || 1, 1);
+  state.adminLogs.items = rows;
+
+  els.adminLogsHint.textContent = state.adminLogs.total > 0
+    ? '可按操作类型、日志ID、操作人、目标用户或说明检索。'
+    : '可调整筛选条件后重新查询。';
+
+  renderAdminLogs(rows);
+  renderAdminLogsPagination();
+  renderAdminSectionState();
 }
 
 function renderJobPreview(row) {
@@ -1070,6 +1307,7 @@ async function handleLogout() {
   state.modelsByCapability = {};
   closeAdminDetailModal();
   closePointsModal();
+  closeRoleModal();
   state.adminUsers = {
     ...state.adminUsers,
     page: 1,
@@ -1081,12 +1319,28 @@ async function handleLogout() {
     items: [],
     summary: { total: 0, activeTotal: 0, disabledTotal: 0, superAdminTotal: 0 },
   };
+  state.adminLogs = {
+    ...state.adminLogs,
+    page: 1,
+    total: 0,
+    totalPages: 1,
+    query: '',
+    actionType: '',
+    items: [],
+  };
   state.ui.authOpen = false;
   state.ui.view = 'console';
+  state.ui.adminSection = 'users';
   state.history = { ...state.history, page: 1, total: 0, totalPages: 1, hasRunningJobs: false };
   state.ledger = { ...state.ledger, page: 1, total: 0, totalPages: 1 };
   renderAuthState();
-  await Promise.all([refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels(), refreshAdminUsers({ page: 1 })]);
+  await Promise.all([
+    refreshHistory({ page: 1 }),
+    refreshLedger({ page: 1 }),
+    refreshModels(),
+    refreshAdminUsers({ page: 1 }),
+    refreshAdminLogs({ page: 1 }),
+  ]);
   setGlobalMsg('已退出登录');
 }
 
@@ -1112,7 +1366,33 @@ els.adminNavBtn.addEventListener('click', async () => {
   state.ui.view = 'admin';
   renderViewState();
   try {
+    if (state.ui.adminSection === 'logs') {
+      await refreshAdminLogs();
+    } else {
+      await refreshAdminUsers();
+    }
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminUsersTabBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  state.ui.adminSection = 'users';
+  renderViewState();
+  try {
     await refreshAdminUsers();
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminLogsTabBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  state.ui.adminSection = 'logs';
+  renderViewState();
+  try {
+    await refreshAdminLogs();
   } catch (err) {
     setGlobalMsg(err.message);
   }
@@ -1251,6 +1531,15 @@ els.adminRefreshBtn.addEventListener('click', async () => {
   }
 });
 
+els.adminLogsRefreshBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  try {
+    await refreshAdminLogs({ page: 1 });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
 els.adminSearchBtn.addEventListener('click', async () => {
   if (!isSuperAdmin()) return;
   try {
@@ -1299,10 +1588,60 @@ els.adminStatusFilter.addEventListener('change', async () => {
   }
 });
 
+els.adminLogSearchBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  try {
+    await refreshAdminLogs({
+      page: 1,
+      query: els.adminLogSearchInput.value,
+      actionType: els.adminLogActionFilter.value,
+    });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminLogSearchInput.addEventListener('keydown', async (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  els.adminLogSearchBtn.click();
+});
+
+els.adminLogActionFilter.addEventListener('change', async () => {
+  if (!isSuperAdmin()) return;
+  try {
+    await refreshAdminLogs({
+      page: 1,
+      query: els.adminLogSearchInput.value,
+      actionType: els.adminLogActionFilter.value,
+    });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
 els.adminUsersPrevBtn.addEventListener('click', async () => {
   if (!isSuperAdmin() || state.adminUsers.page <= 1) return;
   try {
     await refreshAdminUsers({ page: state.adminUsers.page - 1 });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminLogsPrevBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin() || state.adminLogs.page <= 1) return;
+  try {
+    await refreshAdminLogs({ page: state.adminLogs.page - 1 });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminLogsNextBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin() || state.adminLogs.page >= state.adminLogs.totalPages) return;
+  try {
+    await refreshAdminLogs({ page: state.adminLogs.page + 1 });
   } catch (err) {
     setGlobalMsg(err.message);
   }
@@ -1327,12 +1666,17 @@ els.pointsCloseBtn.addEventListener('click', closePointsModal);
 els.pointsBackdrop.addEventListener('click', closePointsModal);
 els.adminDetailCloseBtn.addEventListener('click', closeAdminDetailModal);
 els.adminDetailBackdrop.addEventListener('click', closeAdminDetailModal);
+els.roleCloseBtn.addEventListener('click', closeRoleModal);
+els.roleBackdrop.addEventListener('click', closeRoleModal);
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && els.previewModal.classList.contains('hidden') === false) {
     closePreview();
   }
   if (event.key === 'Escape' && els.pointsModal.classList.contains('hidden') === false) {
     closePointsModal();
+  }
+  if (event.key === 'Escape' && els.roleModal.classList.contains('hidden') === false) {
+    closeRoleModal();
   }
   if (event.key === 'Escape' && els.adminDetailModal.classList.contains('hidden') === false) {
     closeAdminDetailModal();
@@ -1378,6 +1722,12 @@ els.pointsForm.addEventListener('submit', async (event) => {
     closePointsModal();
     setGlobalMsg(`${action === 'deduct' ? '扣减' : '发放'}积分成功`);
     await refreshAdminUsers();
+    if (state.ui.adminDetailOpen && state.ui.adminDetailUserId === targetUser.id) {
+      await openAdminDetailModal(targetUser.id);
+    }
+    if (state.ui.adminSection === 'logs') {
+      await refreshAdminLogs();
+    }
     if (targetUser.id === state.user?.id) {
       await refreshUserSnapshot();
     }
@@ -1385,6 +1735,51 @@ els.pointsForm.addEventListener('submit', async (event) => {
     setPointsFormMsg(err.message);
   } finally {
     setButtonLoading(els.pointsSubmitBtn, '提交中...', false);
+  }
+});
+
+els.roleForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const targetUser = state.ui.roleTargetUser;
+  if (!targetUser) {
+    setRoleFormMsg('未找到目标用户');
+    return;
+  }
+
+  const role = els.roleSelect.value;
+  const reason = String(els.roleReasonInput.value || '').trim();
+  if (!['user', 'super_admin'].includes(role)) {
+    setRoleFormMsg('请选择正确的角色');
+    return;
+  }
+  if (reason.length > 255) {
+    setRoleFormMsg('原因说明不能超过 255 个字符');
+    return;
+  }
+
+  try {
+    setButtonLoading(els.roleSubmitBtn, '提交中...', true);
+    const result = await api(`/api/admin/users/${targetUser.id}/role`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role, reason }),
+    });
+    closeRoleModal();
+    setGlobalMsg(result?.changed ? `已更新 ${targetUser.username} 的角色` : '角色未发生变化');
+    await refreshAdminUsers();
+    if (state.ui.adminDetailOpen && state.ui.adminDetailUserId === targetUser.id) {
+      await openAdminDetailModal(targetUser.id);
+    }
+    if (state.ui.adminSection === 'logs') {
+      await refreshAdminLogs();
+    }
+    if (targetUser.id === state.user?.id) {
+      await refreshUserSnapshot();
+    }
+  } catch (err) {
+    setRoleFormMsg(err.message);
+  } finally {
+    setButtonLoading(els.roleSubmitBtn, '提交中...', false);
   }
 });
 

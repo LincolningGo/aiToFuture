@@ -4,6 +4,14 @@ const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
 const { AppError } = require('../utils/errors');
 
 const router = express.Router();
+const USER_ROLES = new Set(['user', 'super_admin']);
+const ADMIN_ACTION_TYPES = new Set([
+  'grant_points',
+  'deduct_points',
+  'enable_user',
+  'disable_user',
+  'change_role',
+]);
 
 function normalizePage(value, fallback = 1) {
   return Math.max(Number.parseInt(value, 10) || fallback, 1);
@@ -45,8 +53,7 @@ router.get('/users', async (req, res, next) => {
     }
 
     if (role) {
-      const allowedRoles = new Set(['user', 'super_admin']);
-      if (!allowedRoles.has(role)) {
+      if (!USER_ROLES.has(role)) {
         throw new AppError('Invalid role filter', 400, 'INVALID_ROLE_FILTER');
       }
       whereParts.push('role = ?');
@@ -110,6 +117,102 @@ router.get('/users', async (req, res, next) => {
           activeTotal: Number(summaryRow?.active_total || 0),
           disabledTotal: Number(summaryRow?.disabled_total || 0),
           superAdminTotal: Number(summaryRow?.super_admin_total || 0),
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/action-logs', async (req, res, next) => {
+  try {
+    const page = normalizePage(req.query.page, 1);
+    const limit = normalizeLimit(req.query.limit, 10, 100);
+    const offset = (page - 1) * limit;
+    const query = String(req.query.query || '').trim();
+    const actionType = String(req.query.actionType || '').trim();
+
+    const whereParts = [];
+    const params = [];
+
+    if (actionType) {
+      if (!ADMIN_ACTION_TYPES.has(actionType)) {
+        throw new AppError('Invalid action type filter', 400, 'INVALID_ACTION_TYPE_FILTER');
+      }
+      whereParts.push('l.action_type = ?');
+      params.push(actionType);
+    }
+
+    if (query) {
+      const likeValue = `%${query}%`;
+      if (/^\d+$/.test(query)) {
+        whereParts.push(
+          '(l.id = ? OR admin_u.id = ? OR target_u.id = ? OR admin_u.username LIKE ? OR admin_u.email LIKE ? OR target_u.username LIKE ? OR target_u.email LIKE ? OR l.note LIKE ?)',
+        );
+        params.push(Number(query), Number(query), Number(query), likeValue, likeValue, likeValue, likeValue, likeValue);
+      } else {
+        whereParts.push(
+          '(admin_u.username LIKE ? OR admin_u.email LIKE ? OR target_u.username LIKE ? OR target_u.email LIKE ? OR l.note LIKE ?)',
+        );
+        params.push(likeValue, likeValue, likeValue, likeValue, likeValue);
+      }
+    }
+
+    const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
+
+    const [countRows] = await pool.query(
+      `SELECT COUNT(*) AS total
+       FROM admin_action_logs l
+       INNER JOIN users admin_u ON admin_u.id = l.admin_user_id
+       INNER JOIN users target_u ON target_u.id = l.target_user_id
+       ${whereSql}`,
+      params,
+    );
+
+    const [rows] = await pool.query(
+      `SELECT l.id, l.action_type, l.change_amount, l.before_value, l.after_value, l.note, l.created_at,
+              admin_u.id AS admin_user_id, admin_u.username AS admin_username, admin_u.email AS admin_email,
+              target_u.id AS target_user_id, target_u.username AS target_username, target_u.email AS target_email
+       FROM admin_action_logs l
+       INNER JOIN users admin_u ON admin_u.id = l.admin_user_id
+       INNER JOIN users target_u ON target_u.id = l.target_user_id
+       ${whereSql}
+       ORDER BY l.created_at DESC, l.id DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset],
+    );
+
+    const total = Number(countRows?.[0]?.total || 0);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    res.json({
+      success: true,
+      data: {
+        items: rows.map((row) => ({
+          id: row.id,
+          action_type: row.action_type,
+          change_amount: row.change_amount,
+          before_value: row.before_value,
+          after_value: row.after_value,
+          note: row.note,
+          created_at: row.created_at,
+          admin_user: {
+            id: row.admin_user_id,
+            username: row.admin_username,
+            email: row.admin_email,
+          },
+          target_user: {
+            id: row.target_user_id,
+            username: row.target_username,
+            email: row.target_email,
+          },
+        })),
+        pagination: {
+          page: Math.min(page, totalPages),
+          limit,
+          total,
+          totalPages,
         },
       },
     });
@@ -273,6 +376,81 @@ router.patch('/users/:userId/status', async (req, res, next) => {
             username: user.username,
             role: user.role,
             is_active: Boolean(afterValue),
+          },
+        },
+      });
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/users/:userId/role', async (req, res, next) => {
+  const targetUserId = Number.parseInt(req.params.userId, 10);
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+    return next(new AppError('Invalid user id', 400, 'INVALID_USER_ID'));
+  }
+
+  try {
+    const role = String(req.body?.role || '').trim();
+    const reason = String(req.body?.reason || '').trim();
+
+    if (!USER_ROLES.has(role)) {
+      throw new AppError('Invalid role', 400, 'INVALID_ROLE');
+    }
+    if (reason.length > 255) {
+      throw new AppError('reason length must be 0-255', 400, 'INVALID_ROLE_REASON');
+    }
+    if (targetUserId === req.auth.userId && role !== 'super_admin') {
+      throw new AppError('You cannot downgrade your own account', 400, 'CANNOT_DOWNGRADE_SELF');
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      const [rows] = await conn.query(
+        'SELECT id, username, role FROM users WHERE id = ? LIMIT 1 FOR UPDATE',
+        [targetUserId],
+      );
+      if (rows.length === 0) {
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+      }
+
+      const user = rows[0];
+      const beforeRole = String(user.role || 'user');
+      const afterRole = role;
+      const changed = beforeRole !== afterRole;
+
+      if (changed) {
+        await conn.query('UPDATE users SET role = ? WHERE id = ?', [afterRole, targetUserId]);
+        await conn.query(
+          `INSERT INTO admin_action_logs
+           (admin_user_id, target_user_id, action_type, change_amount, before_value, after_value, note)
+           VALUES (?, ?, 'change_role', NULL, NULL, NULL, ?)`,
+          [
+            req.auth.userId,
+            targetUserId,
+            `Role ${beforeRole} -> ${afterRole}${reason ? ` | ${reason}` : ''}`.slice(0, 255),
+          ],
+        );
+      }
+
+      await conn.commit();
+
+      res.json({
+        success: true,
+        data: {
+          changed,
+          user: {
+            id: user.id,
+            username: user.username,
+            role: afterRole,
           },
         },
       });

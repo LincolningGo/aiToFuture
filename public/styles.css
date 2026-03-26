@@ -392,6 +392,14 @@ button.compact {
   margin-bottom: 14px;
 }
 
+.admin-subnav {
+  margin-top: 0;
+}
+
+.admin-section-head {
+  margin-bottom: 14px;
+}
+
 .admin-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -422,6 +430,11 @@ button.compact {
 }
 
 .admin-users-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-logs-list {
   display: grid;
   gap: 10px;
 }
@@ -485,6 +498,40 @@ button.compact {
 
 .admin-user-actions .ghost {
   width: auto;
+}
+
+.admin-log-toolbar {
+  grid-template-columns: minmax(260px, 1.6fr) minmax(180px, 0.8fr) auto;
+}
+
+.admin-log-row {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fcfefe;
+  display: grid;
+  gap: 6px;
+}
+
+.admin-log-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-log-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.admin-log-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .meta-row {
@@ -960,6 +1007,10 @@ button.compact {
     grid-template-columns: 1fr 1fr;
   }
 
+  .admin-log-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .admin-user-row {
     grid-template-columns: 1fr;
   }
@@ -1022,6 +1073,7 @@ button.compact {
 
   .admin-toolbar,
   .admin-stats,
+  .admin-log-toolbar,
   .admin-detail-top,
   .admin-detail-grid {
     grid-template-columns: 1fr;
@@ -1068,6 +1120,7 @@ button.compact {
 
   .workspace-nav,
   .admin-user-head,
+  .admin-log-topline,
   .section-foot {
     flex-direction: column;
     align-items: stretch;

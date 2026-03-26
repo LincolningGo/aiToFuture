@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS admin_action_logs (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   admin_user_id BIGINT UNSIGNED NOT NULL,
   target_user_id BIGINT UNSIGNED NOT NULL,
-  action_type ENUM('grant_points', 'deduct_points', 'enable_user', 'disable_user') NOT NULL,
+  action_type ENUM('grant_points', 'deduct_points', 'enable_user', 'disable_user', 'change_role') NOT NULL,
   change_amount INT DEFAULT NULL,
   before_value INT DEFAULT NULL,
   after_value INT DEFAULT NULL,
