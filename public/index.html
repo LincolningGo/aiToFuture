@@ -6,7 +6,7 @@
     <title>ATF Console</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" href="/favicon.svg" />
-    <link rel="stylesheet" href="/styles.css?v=20260326e" />
+    <link rel="stylesheet" href="/styles.css?v=20260326f" />
   </head>
   <body>
     <div class="bg-shape bg-shape-a"></div>
@@ -315,6 +315,19 @@
 	      </div>
 	    </div>
 
-	    <script src="/app.js?v=20260326e"></script>
+	    <div id="adminDetailModal" class="preview-modal hidden">
+	      <div class="preview-backdrop" id="adminDetailBackdrop"></div>
+	      <div class="preview-dialog admin-detail-dialog">
+	        <div class="preview-head">
+	          <h3 id="adminDetailTitle">用户详情</h3>
+	          <button id="adminDetailCloseBtn" class="ghost compact" type="button">关闭</button>
+	        </div>
+	        <div id="adminDetailBody" class="admin-detail-body">
+	          <p class="hint">加载中...</p>
+	        </div>
+	      </div>
+	    </div>
+
+	    <script src="/app.js?v=20260326f"></script>
   </body>
 </html>

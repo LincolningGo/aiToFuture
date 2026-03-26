@@ -77,6 +77,7 @@ const state = {
     view: 'console',
     pointsModalOpen: false,
     pointsTargetUser: null,
+    adminDetailOpen: false,
   },
 };
 
@@ -154,6 +155,11 @@ const els = {
   pointsReasonInput: document.getElementById('pointsReasonInput'),
   pointsFormMsg: document.getElementById('pointsFormMsg'),
   pointsSubmitBtn: document.getElementById('pointsSubmitBtn'),
+  adminDetailModal: document.getElementById('adminDetailModal'),
+  adminDetailBackdrop: document.getElementById('adminDetailBackdrop'),
+  adminDetailCloseBtn: document.getElementById('adminDetailCloseBtn'),
+  adminDetailTitle: document.getElementById('adminDetailTitle'),
+  adminDetailBody: document.getElementById('adminDetailBody'),
 };
 
 function setGlobalMsg(msg) {
@@ -408,6 +414,115 @@ function closePointsModal() {
   state.ui.pointsTargetUser = null;
   setPointsFormMsg('');
   els.pointsModal.classList.add('hidden');
+}
+
+function closeAdminDetailModal() {
+  state.ui.adminDetailOpen = false;
+  els.adminDetailModal.classList.add('hidden');
+}
+
+function renderAdminDetail(data) {
+  const user = data?.user || null;
+  const summary = data?.summary || {};
+  const ledgerItems = Array.isArray(data?.recentLedger) ? data.recentLedger : [];
+  const generationItems = Array.isArray(data?.recentGenerations) ? data.recentGenerations : [];
+
+  if (!user) {
+    els.adminDetailBody.innerHTML = '<p class="hint">未找到用户信息</p>';
+    return;
+  }
+
+  els.adminDetailTitle.textContent = `用户详情 · ${user.username}`;
+
+  const ledgerHtml = ledgerItems.length
+    ? ledgerItems
+        .map(
+          (row) => `
+            <div class="detail-list-item">
+              <p><strong>${escapeHtml(row.reason)}</strong> · ${row.change_amount > 0 ? '+' : ''}${escapeHtml(row.change_amount)}</p>
+              <p>余额：${escapeHtml(row.balance_after)} · ${formatTime(row.created_at)}</p>
+            </div>
+          `,
+        )
+        .join('')
+    : '<p class="hint compact">暂无积分流水</p>';
+
+  const generationHtml = generationItems.length
+    ? generationItems
+        .map((row) => {
+          const mediaUrl = getSafeMediaUrl(row.public_url);
+          const previewLink = mediaUrl
+            ? `<a class="detail-link" href="${mediaUrl}" target="_blank" rel="noreferrer">查看结果</a>`
+            : '';
+          return `
+            <div class="detail-list-item">
+              <p><strong>${escapeHtml(CAPABILITY_LABELS[row.capability] || row.capability)}</strong> · ${escapeHtml(row.model_name || row.model_code || '-')}</p>
+              <p>状态：${escapeHtml(row.status)} · 消耗：${escapeHtml(row.cost_points)} · ${formatTime(row.created_at)}</p>
+              <p class="detail-prompt">${escapeHtml(row.prompt_text || '')}</p>
+              ${previewLink}
+            </div>
+          `;
+        })
+        .join('')
+    : '<p class="hint compact">暂无生成记录</p>';
+
+  els.adminDetailBody.innerHTML = `
+    <div class="admin-detail-top">
+      <div class="stat-card">
+        <span class="stat-label">用户ID</span>
+        <strong>#${escapeHtml(user.id)}</strong>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">角色</span>
+        <strong>${escapeHtml(user.role === 'super_admin' ? '超级管理员' : '普通用户')}</strong>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">当前积分</span>
+        <strong>${escapeHtml(user.points)}</strong>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">状态</span>
+        <strong>${user.is_active ? '启用' : '禁用'}</strong>
+      </div>
+    </div>
+    <div class="admin-detail-meta">
+      <p>用户名：${escapeHtml(user.username)}</p>
+      <p>邮箱：${escapeHtml(user.email)}</p>
+      <p>注册时间：${formatTime(user.created_at)}</p>
+      <p>更新时间：${formatTime(user.updated_at)}</p>
+      <p>总生成次数：${escapeHtml(summary.generationTotal || 0)} · 积分流水：${escapeHtml(summary.ledgerTotal || 0)}</p>
+    </div>
+    <div class="admin-detail-grid">
+      <section class="detail-card">
+        <div class="section-head">
+          <div>
+            <h3>最近积分流水</h3>
+          </div>
+        </div>
+        <div class="detail-list">${ledgerHtml}</div>
+      </section>
+      <section class="detail-card">
+        <div class="section-head">
+          <div>
+            <h3>最近生成记录</h3>
+          </div>
+        </div>
+        <div class="detail-list">${generationHtml}</div>
+      </section>
+    </div>
+  `;
+}
+
+async function openAdminDetailModal(userId) {
+  state.ui.adminDetailOpen = true;
+  els.adminDetailBody.innerHTML = '<p class="hint">加载中...</p>';
+  els.adminDetailModal.classList.remove('hidden');
+  try {
+    const data = await api(`/api/admin/users/${userId}`);
+    renderAdminDetail(data);
+  } catch (err) {
+    els.adminDetailBody.innerHTML = `<p class="hint">${escapeHtml(err.message)}</p>`;
+  }
 }
 
 function openPreview(row) {
@@ -684,12 +799,16 @@ function renderAdminUsers(rows) {
         </div>
       </div>
       <div class="admin-user-actions">
+        <button type="button" class="ghost compact admin-view-user">查看</button>
         <button type="button" class="ghost compact admin-points-grant">发积分</button>
         <button type="button" class="ghost compact admin-points-deduct">扣积分</button>
         <button type="button" class="ghost compact admin-status-toggle">${user.is_active ? '禁用' : '启用'}</button>
       </div>
     `;
 
+    item.querySelector('.admin-view-user')?.addEventListener('click', () => {
+      void openAdminDetailModal(user.id);
+    });
     item.querySelector('.admin-points-grant')?.addEventListener('click', () => openPointsModal(user, 'grant'));
     item.querySelector('.admin-points-deduct')?.addEventListener('click', () => openPointsModal(user, 'deduct'));
     item.querySelector('.admin-status-toggle')?.addEventListener('click', async () => {
@@ -949,6 +1068,8 @@ async function handleLogout() {
   state.costs = [];
   state.models = [];
   state.modelsByCapability = {};
+  closeAdminDetailModal();
+  closePointsModal();
   state.adminUsers = {
     ...state.adminUsers,
     page: 1,
@@ -1204,12 +1325,17 @@ els.previewCloseBtn.addEventListener('click', closePreview);
 els.previewBackdrop.addEventListener('click', closePreview);
 els.pointsCloseBtn.addEventListener('click', closePointsModal);
 els.pointsBackdrop.addEventListener('click', closePointsModal);
+els.adminDetailCloseBtn.addEventListener('click', closeAdminDetailModal);
+els.adminDetailBackdrop.addEventListener('click', closeAdminDetailModal);
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && els.previewModal.classList.contains('hidden') === false) {
     closePreview();
   }
   if (event.key === 'Escape' && els.pointsModal.classList.contains('hidden') === false) {
     closePointsModal();
+  }
+  if (event.key === 'Escape' && els.adminDetailModal.classList.contains('hidden') === false) {
+    closeAdminDetailModal();
   }
 });
 

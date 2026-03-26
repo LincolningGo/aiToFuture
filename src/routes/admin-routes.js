@@ -118,6 +118,102 @@ router.get('/users', async (req, res, next) => {
   }
 });
 
+router.get('/users/:userId', async (req, res, next) => {
+  const targetUserId = Number.parseInt(req.params.userId, 10);
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+    return next(new AppError('Invalid user id', 400, 'INVALID_USER_ID'));
+  }
+
+  try {
+    const [userRows] = await pool.query(
+      'SELECT id, username, email, role, points, is_active, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
+      [targetUserId],
+    );
+    if (userRows.length === 0) {
+      throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    }
+
+    const [[generationTotalRow]] = await pool.query(
+      'SELECT COUNT(*) AS total FROM generation_jobs WHERE user_id = ?',
+      [targetUserId],
+    );
+    const [[ledgerTotalRow]] = await pool.query(
+      'SELECT COUNT(*) AS total FROM points_ledger WHERE user_id = ?',
+      [targetUserId],
+    );
+
+    const [ledgerRows] = await pool.query(
+      `SELECT change_amount, balance_after, reason, reference_type, reference_id, created_at
+       FROM points_ledger
+       WHERE user_id = ?
+       ORDER BY created_at DESC
+       LIMIT 8`,
+      [targetUserId],
+    );
+
+    const [generationRows] = await pool.query(
+      `SELECT j.job_uuid, j.capability, j.provider, j.model_code, j.model_name,
+              j.status, j.cost_points, j.prompt_text, j.error_message, j.created_at,
+              o.file_type, o.public_url, o.metadata_json AS output_metadata
+       FROM generation_jobs j
+       LEFT JOIN generation_outputs o ON o.job_id = j.id
+       WHERE j.user_id = ?
+       ORDER BY j.created_at DESC
+       LIMIT 6`,
+      [targetUserId],
+    );
+
+    const recentGenerations = generationRows.map((row) => {
+      let outputPreviewText = null;
+      if (row.output_metadata) {
+        try {
+          const metadata =
+            typeof row.output_metadata === 'string' ? JSON.parse(row.output_metadata) : row.output_metadata;
+          if (metadata && typeof metadata.textPreview === 'string' && metadata.textPreview.trim()) {
+            outputPreviewText = metadata.textPreview.trim();
+          }
+        } catch (_err) {
+          outputPreviewText = null;
+        }
+      }
+
+      return {
+        job_uuid: row.job_uuid,
+        capability: row.capability,
+        provider: row.provider,
+        model_code: row.model_code,
+        model_name: row.model_name,
+        status: row.status,
+        cost_points: row.cost_points,
+        prompt_text: row.prompt_text,
+        error_message: row.error_message,
+        created_at: row.created_at,
+        file_type: row.file_type,
+        public_url: row.public_url,
+        output_preview_text: outputPreviewText,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          ...userRows[0],
+          is_active: Boolean(userRows[0].is_active),
+        },
+        summary: {
+          generationTotal: Number(generationTotalRow?.total || 0),
+          ledgerTotal: Number(ledgerTotalRow?.total || 0),
+        },
+        recentLedger: ledgerRows,
+        recentGenerations,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.patch('/users/:userId/status', async (req, res, next) => {
   const targetUserId = Number.parseInt(req.params.userId, 10);
   if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
