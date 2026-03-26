@@ -9,6 +9,7 @@ const errorHandler = require('./middleware/error-handler');
 const { createRateLimit } = require('./middleware/rate-limit');
 const authRoutes = require('./routes/auth-routes');
 const userRoutes = require('./routes/user-routes');
+const adminRoutes = require('./routes/admin-routes');
 const modelRoutes = require('./routes/model-routes');
 const generationRoutes = require('./routes/generation-routes');
 const mediaRoutes = require('./routes/media-routes');
@@ -87,6 +88,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/models', modelRoutes);
 app.use('/api/generation', generationRoutes);
 

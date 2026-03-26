@@ -6,7 +6,7 @@
     <title>ATF Console</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" href="/favicon.svg" />
-    <link rel="stylesheet" href="/styles.css?v=20260326d" />
+    <link rel="stylesheet" href="/styles.css?v=20260326e" />
   </head>
   <body>
     <div class="bg-shape bg-shape-a"></div>
@@ -99,120 +99,186 @@
 	        </div>
 	      </section>
 
-      <section class="panel workspace reveal" id="workspace">
-        <header class="workspace-head">
-          <div class="workspace-brand">
-            <img src="/atf-logo.svg" alt="ATF Logo" class="workspace-logo" />
+	      <section class="panel workspace reveal" id="workspace">
+	        <header class="workspace-head">
+	          <div class="workspace-brand">
+	            <img src="/atf-logo.svg" alt="ATF Logo" class="workspace-logo" />
             <div>
               <h2 id="welcomeText">ATF</h2>
             </div>
             <p id="pointsText"></p>
           </div>
-          <div class="session-box">
-            <p id="sessionHint" class="hint compact"></p>
-            <button id="authActionBtn" class="ghost compact" type="button">账户</button>
-          </div>
-        </header>
+	          <div class="session-box">
+	            <p id="sessionHint" class="hint compact"></p>
+	            <button id="authActionBtn" class="ghost compact" type="button">账户</button>
+	          </div>
+	        </header>
 
-        <div class="grid workspace-main">
-          <div class="card card-form wide">
-            <h3>生成任务</h3>
-            <form id="generateForm">
-              <label>能力类型</label>
-              <select name="capability" id="capabilitySelect">
-                <option value="text_to_image">文生图</option>
-                <option value="image_to_image">图生图</option>
-                <option value="text_to_video">文生视频</option>
-                <option value="text_to_audio">文生语音</option>
-                <option value="lyrics_generation">歌词生成</option>
-                <option value="music_generation">音乐生成</option>
-              </select>
+	        <div id="workspaceNav" class="workspace-nav hidden">
+	          <button id="consoleNavBtn" class="nav-chip active" type="button">控制台</button>
+	          <button id="adminNavBtn" class="nav-chip" type="button">用户管理</button>
+	        </div>
 
-              <label>模型选择</label>
-              <div class="field-row">
-                <select name="modelCode" id="modelSelect"></select>
-                <button type="button" id="refreshModelsBtn" class="ghost compact">刷新模型</button>
-              </div>
+	        <div id="consoleView">
+	          <div class="grid workspace-main">
+	            <div class="card card-form wide">
+	              <h3>生成任务</h3>
+	              <form id="generateForm">
+	                <label>能力类型</label>
+	                <select name="capability" id="capabilitySelect">
+	                  <option value="text_to_image">文生图</option>
+	                  <option value="image_to_image">图生图</option>
+	                  <option value="text_to_video">文生视频</option>
+	                  <option value="text_to_audio">文生语音</option>
+	                  <option value="lyrics_generation">歌词生成</option>
+	                  <option value="music_generation">音乐生成</option>
+	                </select>
 
-              <label>Prompt</label>
-              <textarea
-                name="prompt"
-                id="promptInput"
-                rows="4"
-                required
-                maxlength="1500"
-                placeholder="输入内容"
-              ></textarea>
+	                <label>模型选择</label>
+	                <div class="field-row">
+	                  <select name="modelCode" id="modelSelect"></select>
+	                  <button type="button" id="refreshModelsBtn" class="ghost compact">刷新模型</button>
+	                </div>
 
-              <div class="meta-row">
-                <span class="hint" id="promptCounter">0 / 1500</span>
-              </div>
+	                <label>Prompt</label>
+	                <textarea
+	                  name="prompt"
+	                  id="promptInput"
+	                  rows="4"
+	                  required
+	                  maxlength="1500"
+	                  placeholder="输入内容"
+	                ></textarea>
 
-              <div id="imageInputBox" class="hidden">
-                <label>图生图输入图片</label>
-                <input name="inputImage" type="file" accept="image/*" />
-              </div>
+	                <div class="meta-row">
+	                  <span class="hint" id="promptCounter">0 / 1500</span>
+	                </div>
 
-              <div id="musicInputBox" class="hidden">
-                <label>歌词</label>
-                <textarea
-                  name="lyrics"
-                  id="lyricsInput"
-                  rows="6"
-                  maxlength="3500"
-                  placeholder="可留空；留空时由模型自动生成歌词"
-                ></textarea>
-                <label class="checkbox-row">
-                  <input type="checkbox" name="isInstrumental" id="instrumentalCheckbox" />
-                  <span>纯音乐</span>
-                </label>
-              </div>
+	                <div id="imageInputBox" class="hidden">
+	                  <label>图生图输入图片</label>
+	                  <input name="inputImage" type="file" accept="image/*" />
+	                </div>
 
-              <button type="submit" id="submitBtn">提交</button>
-            </form>
-            <p id="generateMsg" class="hint"></p>
-          </div>
-        </div>
+	                <div id="musicInputBox" class="hidden">
+	                  <label>歌词</label>
+	                  <textarea
+	                    name="lyrics"
+	                    id="lyricsInput"
+	                    rows="6"
+	                    maxlength="3500"
+	                    placeholder="可留空；留空时由模型自动生成歌词"
+	                  ></textarea>
+	                  <label class="checkbox-row">
+	                    <input type="checkbox" name="isInstrumental" id="instrumentalCheckbox" />
+	                    <span>纯音乐</span>
+	                  </label>
+	                </div>
 
-        <div class="grid single">
-          <div class="card wide">
-            <div class="section-head">
-              <div>
-                <h3>任务记录</h3>
-                <p id="historySummary" class="hint compact"></p>
-              </div>
-              <div class="pager">
-                <button type="button" id="historyPrevBtn" class="ghost compact">上一页</button>
-                <span id="historyPageInfo" class="pager-info">第 1 / 1 页</span>
-                <button type="button" id="historyNextBtn" class="ghost compact">下一页</button>
-              </div>
-            </div>
-            <div id="historyList" class="history history-jobs"></div>
-          </div>
-        </div>
+	                <button type="submit" id="submitBtn">提交</button>
+	              </form>
+	              <p id="generateMsg" class="hint"></p>
+	            </div>
+	          </div>
 
-        <div class="grid single">
-          <div class="card wide">
-            <div class="section-head">
-              <div>
-                <h3>积分流水</h3>
-                <p id="ledgerSummary" class="hint compact"></p>
-              </div>
-              <div class="pager">
-                <button type="button" id="ledgerPrevBtn" class="ghost compact">上一页</button>
-                <span id="ledgerPageInfo" class="pager-info">第 1 / 1 页</span>
-                <button type="button" id="ledgerNextBtn" class="ghost compact">下一页</button>
-              </div>
-            </div>
-            <div id="ledgerList" class="history"></div>
-          </div>
-        </div>
-      </section>
+	          <div class="grid single">
+	            <div class="card wide">
+	              <div class="section-head">
+	                <div>
+	                  <h3>任务记录</h3>
+	                  <p id="historySummary" class="hint compact"></p>
+	                </div>
+	                <div class="pager">
+	                  <button type="button" id="historyPrevBtn" class="ghost compact">上一页</button>
+	                  <span id="historyPageInfo" class="pager-info">第 1 / 1 页</span>
+	                  <button type="button" id="historyNextBtn" class="ghost compact">下一页</button>
+	                </div>
+	              </div>
+	              <div id="historyList" class="history history-jobs"></div>
+	            </div>
+	          </div>
+
+	          <div class="grid single">
+	            <div class="card wide">
+	              <div class="section-head">
+	                <div>
+	                  <h3>积分流水</h3>
+	                  <p id="ledgerSummary" class="hint compact"></p>
+	                </div>
+	                <div class="pager">
+	                  <button type="button" id="ledgerPrevBtn" class="ghost compact">上一页</button>
+	                  <span id="ledgerPageInfo" class="pager-info">第 1 / 1 页</span>
+	                  <button type="button" id="ledgerNextBtn" class="ghost compact">下一页</button>
+	                </div>
+	              </div>
+	              <div id="ledgerList" class="history"></div>
+	            </div>
+	          </div>
+	        </div>
+
+	        <section id="adminView" class="hidden admin-view">
+	          <div class="grid single">
+	            <div class="card wide">
+	              <div class="section-head admin-head">
+	                <div>
+	                  <h3>用户管理</h3>
+	                  <p id="adminSummary" class="hint compact"></p>
+	                </div>
+	                <button type="button" id="adminRefreshBtn" class="ghost compact">刷新用户</button>
+	              </div>
+
+	              <div class="admin-stats" id="adminStats">
+	                <div class="stat-card">
+	                  <span class="stat-label">总用户</span>
+	                  <strong id="adminStatTotal">0</strong>
+	                </div>
+	                <div class="stat-card">
+	                  <span class="stat-label">启用中</span>
+	                  <strong id="adminStatActive">0</strong>
+	                </div>
+	                <div class="stat-card">
+	                  <span class="stat-label">已禁用</span>
+	                  <strong id="adminStatDisabled">0</strong>
+	                </div>
+	                <div class="stat-card">
+	                  <span class="stat-label">超管</span>
+	                  <strong id="adminStatSuper">0</strong>
+	                </div>
+	              </div>
+
+	              <div class="admin-toolbar">
+	                <input id="adminSearchInput" type="search" placeholder="搜索用户ID / 用户名 / 邮箱" />
+	                <select id="adminRoleFilter">
+	                  <option value="">全部角色</option>
+	                  <option value="super_admin">超级管理员</option>
+	                  <option value="user">普通用户</option>
+	                </select>
+	                <select id="adminStatusFilter">
+	                  <option value="">全部状态</option>
+	                  <option value="active">启用</option>
+	                  <option value="disabled">禁用</option>
+	                </select>
+	                <button type="button" id="adminSearchBtn" class="ghost compact">查询</button>
+	              </div>
+
+	              <div id="adminUsersList" class="admin-users-list"></div>
+
+	              <div class="section-foot">
+	                <p id="adminUsersHint" class="hint compact"></p>
+	                <div class="pager">
+	                  <button type="button" id="adminUsersPrevBtn" class="ghost compact">上一页</button>
+	                  <span id="adminUsersPageInfo" class="pager-info">第 1 / 1 页</span>
+	                  <button type="button" id="adminUsersNextBtn" class="ghost compact">下一页</button>
+	                </div>
+	              </div>
+	            </div>
+	          </div>
+	        </section>
+	      </section>
 
       <p id="globalMsg" class="global-msg"></p>
     </main>
 
-    <div id="previewModal" class="preview-modal hidden">
+	    <div id="previewModal" class="preview-modal hidden">
       <div class="preview-backdrop" id="previewBackdrop"></div>
       <div class="preview-dialog">
         <div class="preview-head">
@@ -221,8 +287,34 @@
         </div>
         <div id="previewBody" class="preview-body"></div>
       </div>
-    </div>
+	    </div>
 
-    <script src="/app.js?v=20260326d"></script>
+	    <div id="pointsModal" class="preview-modal hidden">
+	      <div class="preview-backdrop" id="pointsBackdrop"></div>
+	      <div class="preview-dialog admin-dialog">
+	        <div class="preview-head">
+	          <h3 id="pointsModalTitle">积分操作</h3>
+	          <button id="pointsCloseBtn" class="ghost compact" type="button">关闭</button>
+	        </div>
+	        <p id="pointsTargetText" class="hint compact"></p>
+	        <form id="pointsForm" class="admin-points-form">
+	          <label>操作类型</label>
+	          <select id="pointsActionSelect" name="action">
+	            <option value="grant">发放积分</option>
+	            <option value="deduct">扣减积分</option>
+	          </select>
+	          <label>积分数量</label>
+	          <input id="pointsAmountInput" name="amount" type="number" min="1" step="1" required />
+	          <label>原因说明</label>
+	          <textarea id="pointsReasonInput" name="reason" rows="4" maxlength="255" placeholder="请输入本次操作原因"></textarea>
+	          <p id="pointsFormMsg" class="form-msg hidden"></p>
+	          <div class="form-actions inline-actions">
+	            <button id="pointsSubmitBtn" type="submit">确认提交</button>
+	          </div>
+	        </form>
+	      </div>
+	    </div>
+
+	    <script src="/app.js?v=20260326e"></script>
   </body>
 </html>

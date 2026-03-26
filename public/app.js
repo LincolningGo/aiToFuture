@@ -54,10 +54,29 @@ const state = {
     total: 0,
     totalPages: 1,
   },
+  adminUsers: {
+    page: 1,
+    limit: 8,
+    total: 0,
+    totalPages: 1,
+    query: '',
+    role: '',
+    status: '',
+    summary: {
+      total: 0,
+      activeTotal: 0,
+      disabledTotal: 0,
+      superAdminTotal: 0,
+    },
+    items: [],
+  },
   ui: {
     authOpen: false,
     jobPollTimer: null,
     jobPollBusy: false,
+    view: 'console',
+    pointsModalOpen: false,
+    pointsTargetUser: null,
   },
 };
 
@@ -69,6 +88,11 @@ const els = {
   authMsg: document.getElementById('authMsg'),
   sessionHint: document.getElementById('sessionHint'),
   authActionBtn: document.getElementById('authActionBtn'),
+  workspaceNav: document.getElementById('workspaceNav'),
+  consoleNavBtn: document.getElementById('consoleNavBtn'),
+  adminNavBtn: document.getElementById('adminNavBtn'),
+  consoleView: document.getElementById('consoleView'),
+  adminView: document.getElementById('adminView'),
   loginForm: document.getElementById('loginForm'),
   registerForm: document.getElementById('registerForm'),
   loginSubmitBtn: document.getElementById('loginSubmitBtn'),
@@ -99,11 +123,37 @@ const els = {
   ledgerNextBtn: document.getElementById('ledgerNextBtn'),
   ledgerPageInfo: document.getElementById('ledgerPageInfo'),
   ledgerList: document.getElementById('ledgerList'),
+  adminSummary: document.getElementById('adminSummary'),
+  adminStatTotal: document.getElementById('adminStatTotal'),
+  adminStatActive: document.getElementById('adminStatActive'),
+  adminStatDisabled: document.getElementById('adminStatDisabled'),
+  adminStatSuper: document.getElementById('adminStatSuper'),
+  adminSearchInput: document.getElementById('adminSearchInput'),
+  adminRoleFilter: document.getElementById('adminRoleFilter'),
+  adminStatusFilter: document.getElementById('adminStatusFilter'),
+  adminSearchBtn: document.getElementById('adminSearchBtn'),
+  adminRefreshBtn: document.getElementById('adminRefreshBtn'),
+  adminUsersList: document.getElementById('adminUsersList'),
+  adminUsersHint: document.getElementById('adminUsersHint'),
+  adminUsersPrevBtn: document.getElementById('adminUsersPrevBtn'),
+  adminUsersNextBtn: document.getElementById('adminUsersNextBtn'),
+  adminUsersPageInfo: document.getElementById('adminUsersPageInfo'),
   previewModal: document.getElementById('previewModal'),
   previewBackdrop: document.getElementById('previewBackdrop'),
   previewCloseBtn: document.getElementById('previewCloseBtn'),
   previewTitle: document.getElementById('previewTitle'),
   previewBody: document.getElementById('previewBody'),
+  pointsModal: document.getElementById('pointsModal'),
+  pointsBackdrop: document.getElementById('pointsBackdrop'),
+  pointsCloseBtn: document.getElementById('pointsCloseBtn'),
+  pointsModalTitle: document.getElementById('pointsModalTitle'),
+  pointsTargetText: document.getElementById('pointsTargetText'),
+  pointsForm: document.getElementById('pointsForm'),
+  pointsActionSelect: document.getElementById('pointsActionSelect'),
+  pointsAmountInput: document.getElementById('pointsAmountInput'),
+  pointsReasonInput: document.getElementById('pointsReasonInput'),
+  pointsFormMsg: document.getElementById('pointsFormMsg'),
+  pointsSubmitBtn: document.getElementById('pointsSubmitBtn'),
 };
 
 function setGlobalMsg(msg) {
@@ -152,6 +202,17 @@ function validateRegisterFormInput({ username, email, password }) {
     return '密码至少需要 8 位';
   }
   return null;
+}
+
+function isSuperAdmin() {
+  return state.user?.role === 'super_admin';
+}
+
+function setPointsFormMsg(msg, type = 'error') {
+  const normalized = String(msg || '').trim();
+  els.pointsFormMsg.textContent = normalized;
+  els.pointsFormMsg.classList.toggle('hidden', normalized.length === 0);
+  els.pointsFormMsg.dataset.type = normalized.length === 0 ? '' : type;
 }
 
 function getSafeMediaUrl(input) {
@@ -275,6 +336,19 @@ function getCostFor(capability) {
   return DEFAULT_COSTS[capability] || 0;
 }
 
+function renderViewState() {
+  const canAdmin = isSuperAdmin();
+  if (!canAdmin) {
+    state.ui.view = 'console';
+  }
+
+  els.workspaceNav.classList.toggle('hidden', !canAdmin);
+  els.consoleNavBtn.classList.toggle('active', state.ui.view === 'console');
+  els.adminNavBtn.classList.toggle('active', state.ui.view === 'admin');
+  els.consoleView.classList.toggle('hidden', state.ui.view !== 'console');
+  els.adminView.classList.toggle('hidden', state.ui.view !== 'admin' || !canAdmin);
+}
+
 function renderAuthState() {
   els.workspace.classList.remove('hidden');
   els.authPanel.classList.toggle('hidden', state.ui.authOpen === false);
@@ -290,6 +364,8 @@ function renderAuthState() {
     els.sessionHint.textContent = '';
     els.authActionBtn.textContent = '账户';
   }
+
+  renderViewState();
 }
 
 function renderHistoryPagination() {
@@ -304,6 +380,34 @@ function renderLedgerPagination() {
   els.ledgerPageInfo.textContent = `第 ${page} / ${totalPages} 页`;
   els.ledgerPrevBtn.disabled = page <= 1 || state.user === null;
   els.ledgerNextBtn.disabled = page >= totalPages || state.user === null || total === 0;
+}
+
+function renderAdminPagination() {
+  const { page, totalPages, total } = state.adminUsers;
+  els.adminUsersPageInfo.textContent = `第 ${page} / ${totalPages} 页`;
+  els.adminUsersPrevBtn.disabled = page <= 1 || !isSuperAdmin();
+  els.adminUsersNextBtn.disabled = page >= totalPages || !isSuperAdmin() || total === 0;
+}
+
+function openPointsModal(user, action = 'grant') {
+  state.ui.pointsModalOpen = true;
+  state.ui.pointsTargetUser = user || null;
+  els.pointsActionSelect.value = action;
+  els.pointsAmountInput.value = '';
+  els.pointsReasonInput.value = '';
+  els.pointsModalTitle.textContent = action === 'deduct' ? '扣减积分' : '发放积分';
+  els.pointsTargetText.textContent = user
+    ? `用户 #${user.id} · ${user.username} · 当前积分 ${user.points}`
+    : '';
+  setPointsFormMsg('');
+  els.pointsModal.classList.remove('hidden');
+}
+
+function closePointsModal() {
+  state.ui.pointsModalOpen = false;
+  state.ui.pointsTargetUser = null;
+  setPointsFormMsg('');
+  els.pointsModal.classList.add('hidden');
 }
 
 function openPreview(row) {
@@ -512,7 +616,11 @@ async function refreshMe(options = {}) {
     renderAuthState();
     state.history.page = 1;
     state.ledger.page = 1;
-    await Promise.all([refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels()]);
+    const tasks = [refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels()];
+    if (isSuperAdmin()) {
+      tasks.push(refreshAdminUsers({ page: 1 }));
+    }
+    await Promise.all(tasks);
     updatePromptCounter();
     setAuthMsg('');
   } catch (_err) {
@@ -521,12 +629,158 @@ async function refreshMe(options = {}) {
     state.costs = [];
     state.models = [];
     state.modelsByCapability = {};
+    state.adminUsers = {
+      ...state.adminUsers,
+      page: 1,
+      total: 0,
+      totalPages: 1,
+      items: [],
+      summary: { total: 0, activeTotal: 0, disabledTotal: 0, superAdminTotal: 0 },
+    };
+    state.ui.view = 'console';
     state.history = { ...state.history, page: 1, total: 0, totalPages: 1, hasRunningJobs: false };
     state.ledger = { ...state.ledger, page: 1, total: 0, totalPages: 1 };
     renderAuthState();
     await Promise.all([refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels()]);
     updatePromptCounter();
   }
+}
+
+function renderAdminUsers(rows) {
+  els.adminUsersList.innerHTML = '';
+
+  if (!isSuperAdmin()) {
+    els.adminUsersList.innerHTML = '<p class="hint">仅超级管理员可访问</p>';
+    return;
+  }
+
+  if (!rows.length) {
+    els.adminUsersList.innerHTML = '<p class="hint">暂无匹配用户</p>';
+    return;
+  }
+
+  rows.forEach((user) => {
+    const item = document.createElement('div');
+    const roleLabel = user.role === 'super_admin' ? '超级管理员' : '普通用户';
+    const statusLabel = user.is_active ? '启用' : '禁用';
+    item.className = 'admin-user-row';
+    item.innerHTML = `
+      <div class="admin-user-main">
+        <div class="admin-user-head">
+          <div>
+            <strong>${escapeHtml(user.username)}</strong>
+            <span class="admin-user-id">#${escapeHtml(user.id)}</span>
+          </div>
+          <div class="admin-user-tags">
+            <span class="status-badge ${user.is_active ? 'completed' : 'failed'}">${statusLabel}</span>
+            <span class="status-badge">${roleLabel}</span>
+          </div>
+        </div>
+        <p class="admin-user-email">${escapeHtml(user.email)}</p>
+        <div class="admin-user-meta">
+          <span>积分：<strong>${escapeHtml(user.points)}</strong></span>
+          <span>注册：${formatTime(user.created_at)}</span>
+          <span>更新：${formatTime(user.updated_at)}</span>
+        </div>
+      </div>
+      <div class="admin-user-actions">
+        <button type="button" class="ghost compact admin-points-grant">发积分</button>
+        <button type="button" class="ghost compact admin-points-deduct">扣积分</button>
+        <button type="button" class="ghost compact admin-status-toggle">${user.is_active ? '禁用' : '启用'}</button>
+      </div>
+    `;
+
+    item.querySelector('.admin-points-grant')?.addEventListener('click', () => openPointsModal(user, 'grant'));
+    item.querySelector('.admin-points-deduct')?.addEventListener('click', () => openPointsModal(user, 'deduct'));
+    item.querySelector('.admin-status-toggle')?.addEventListener('click', async () => {
+      const actionLabel = user.is_active ? '禁用' : '启用';
+      const confirmed = window.confirm(`确认${actionLabel}用户 ${user.username} 吗？`);
+      if (!confirmed) return;
+
+      try {
+        await api(`/api/admin/users/${user.id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isActive: !user.is_active }),
+        });
+        setGlobalMsg(`已${actionLabel}用户 ${user.username}`);
+        await refreshAdminUsers();
+      } catch (err) {
+        setGlobalMsg(err.message);
+      }
+    });
+
+    els.adminUsersList.appendChild(item);
+  });
+}
+
+function syncAdminFiltersToInputs() {
+  els.adminSearchInput.value = state.adminUsers.query;
+  els.adminRoleFilter.value = state.adminUsers.role;
+  els.adminStatusFilter.value = state.adminUsers.status;
+}
+
+async function refreshAdminUsers(options = {}) {
+  if (!isSuperAdmin()) {
+    state.adminUsers = {
+      ...state.adminUsers,
+      page: 1,
+      total: 0,
+      totalPages: 1,
+      items: [],
+      summary: { total: 0, activeTotal: 0, disabledTotal: 0, superAdminTotal: 0 },
+    };
+    els.adminSummary.textContent = '';
+    renderAdminUsers([]);
+    renderAdminPagination();
+    return;
+  }
+
+  if (typeof options.query === 'string') state.adminUsers.query = options.query.trim();
+  if (typeof options.role === 'string') state.adminUsers.role = options.role.trim();
+  if (typeof options.status === 'string') state.adminUsers.status = options.status.trim();
+  if (options.page) state.adminUsers.page = Math.max(Number(options.page) || 1, 1);
+
+  syncAdminFiltersToInputs();
+
+  const queryParams = new URLSearchParams({
+    page: String(state.adminUsers.page),
+    limit: String(state.adminUsers.limit),
+  });
+  if (state.adminUsers.query) queryParams.set('query', state.adminUsers.query);
+  if (state.adminUsers.role) queryParams.set('role', state.adminUsers.role);
+  if (state.adminUsers.status) queryParams.set('status', state.adminUsers.status);
+
+  const data = await api(`/api/admin/users?${queryParams.toString()}`);
+  const rows = Array.isArray(data?.items) ? data.items : [];
+  const pagination = data?.pagination || {};
+  const summary = data?.summary || {};
+
+  state.adminUsers.page = Math.max(Number(pagination.page) || state.adminUsers.page, 1);
+  state.adminUsers.limit = Math.max(Number(pagination.limit) || state.adminUsers.limit, 1);
+  state.adminUsers.total = Math.max(Number(pagination.total) || rows.length, 0);
+  state.adminUsers.totalPages = Math.max(Number(pagination.totalPages) || 1, 1);
+  state.adminUsers.items = rows;
+  state.adminUsers.summary = {
+    total: Number(summary.total || 0),
+    activeTotal: Number(summary.activeTotal || 0),
+    disabledTotal: Number(summary.disabledTotal || 0),
+    superAdminTotal: Number(summary.superAdminTotal || 0),
+  };
+
+  els.adminStatTotal.textContent = state.adminUsers.summary.total;
+  els.adminStatActive.textContent = state.adminUsers.summary.activeTotal;
+  els.adminStatDisabled.textContent = state.adminUsers.summary.disabledTotal;
+  els.adminStatSuper.textContent = state.adminUsers.summary.superAdminTotal;
+  els.adminSummary.textContent = state.adminUsers.total > 0
+    ? `共 ${state.adminUsers.total} 个匹配用户，当前每页 ${state.adminUsers.limit} 条。`
+    : '暂无匹配用户。';
+  els.adminUsersHint.textContent = state.adminUsers.total > 0
+    ? '支持搜索用户ID、用户名、邮箱；积分与状态操作实时生效。'
+    : '可调整筛选条件后重新查询。';
+
+  renderAdminUsers(rows);
+  renderAdminPagination();
 }
 
 function renderJobPreview(row) {
@@ -695,11 +949,23 @@ async function handleLogout() {
   state.costs = [];
   state.models = [];
   state.modelsByCapability = {};
+  state.adminUsers = {
+    ...state.adminUsers,
+    page: 1,
+    total: 0,
+    totalPages: 1,
+    query: '',
+    role: '',
+    status: '',
+    items: [],
+    summary: { total: 0, activeTotal: 0, disabledTotal: 0, superAdminTotal: 0 },
+  };
   state.ui.authOpen = false;
+  state.ui.view = 'console';
   state.history = { ...state.history, page: 1, total: 0, totalPages: 1, hasRunningJobs: false };
   state.ledger = { ...state.ledger, page: 1, total: 0, totalPages: 1 };
   renderAuthState();
-  await Promise.all([refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels()]);
+  await Promise.all([refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels(), refreshAdminUsers({ page: 1 })]);
   setGlobalMsg('已退出登录');
 }
 
@@ -712,6 +978,22 @@ els.authActionBtn.addEventListener('click', async () => {
     await handleLogout();
   } else {
     openAuthPanel('login');
+  }
+});
+
+els.consoleNavBtn.addEventListener('click', () => {
+  state.ui.view = 'console';
+  renderViewState();
+});
+
+els.adminNavBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  state.ui.view = 'admin';
+  renderViewState();
+  try {
+    await refreshAdminUsers();
+  } catch (err) {
+    setGlobalMsg(err.message);
   }
 });
 
@@ -839,15 +1121,144 @@ els.ledgerNextBtn.addEventListener('click', async () => {
   await refreshLedger({ page: state.ledger.page + 1 });
 });
 
+els.adminRefreshBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  try {
+    await refreshAdminUsers({ page: 1 });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminSearchBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  try {
+    await refreshAdminUsers({
+      page: 1,
+      query: els.adminSearchInput.value,
+      role: els.adminRoleFilter.value,
+      status: els.adminStatusFilter.value,
+    });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminSearchInput.addEventListener('keydown', async (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  els.adminSearchBtn.click();
+});
+
+els.adminRoleFilter.addEventListener('change', async () => {
+  if (!isSuperAdmin()) return;
+  try {
+    await refreshAdminUsers({
+      page: 1,
+      query: els.adminSearchInput.value,
+      role: els.adminRoleFilter.value,
+      status: els.adminStatusFilter.value,
+    });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminStatusFilter.addEventListener('change', async () => {
+  if (!isSuperAdmin()) return;
+  try {
+    await refreshAdminUsers({
+      page: 1,
+      query: els.adminSearchInput.value,
+      role: els.adminRoleFilter.value,
+      status: els.adminStatusFilter.value,
+    });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminUsersPrevBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin() || state.adminUsers.page <= 1) return;
+  try {
+    await refreshAdminUsers({ page: state.adminUsers.page - 1 });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminUsersNextBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin() || state.adminUsers.page >= state.adminUsers.totalPages) return;
+  try {
+    await refreshAdminUsers({ page: state.adminUsers.page + 1 });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
 els.promptInput.addEventListener('input', () => {
   updatePromptCounter();
 });
 
 els.previewCloseBtn.addEventListener('click', closePreview);
 els.previewBackdrop.addEventListener('click', closePreview);
+els.pointsCloseBtn.addEventListener('click', closePointsModal);
+els.pointsBackdrop.addEventListener('click', closePointsModal);
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && els.previewModal.classList.contains('hidden') === false) {
     closePreview();
+  }
+  if (event.key === 'Escape' && els.pointsModal.classList.contains('hidden') === false) {
+    closePointsModal();
+  }
+});
+
+els.pointsActionSelect.addEventListener('change', () => {
+  els.pointsModalTitle.textContent = els.pointsActionSelect.value === 'deduct' ? '扣减积分' : '发放积分';
+});
+
+els.pointsForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const targetUser = state.ui.pointsTargetUser;
+  if (!targetUser) {
+    setPointsFormMsg('未找到目标用户');
+    return;
+  }
+
+  const action = els.pointsActionSelect.value;
+  const amount = Number.parseInt(els.pointsAmountInput.value, 10);
+  const reason = String(els.pointsReasonInput.value || '').trim();
+
+  if (!['grant', 'deduct'].includes(action)) {
+    setPointsFormMsg('请选择正确的操作类型');
+    return;
+  }
+  if (!Number.isInteger(amount) || amount <= 0) {
+    setPointsFormMsg('请输入大于 0 的积分数量');
+    return;
+  }
+  if (reason.length < 2) {
+    setPointsFormMsg('请填写至少 2 个字的原因说明');
+    return;
+  }
+
+  try {
+    setButtonLoading(els.pointsSubmitBtn, '提交中...', true);
+    await api(`/api/admin/users/${targetUser.id}/points`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, amount, reason }),
+    });
+    closePointsModal();
+    setGlobalMsg(`${action === 'deduct' ? '扣减' : '发放'}积分成功`);
+    await refreshAdminUsers();
+    if (targetUser.id === state.user?.id) {
+      await refreshUserSnapshot();
+    }
+  } catch (err) {
+    setPointsFormMsg(err.message);
+  } finally {
+    setButtonLoading(els.pointsSubmitBtn, '提交中...', false);
   }
 });
 

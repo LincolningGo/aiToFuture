@@ -50,6 +50,23 @@ async function requireAuth(req, _res, next) {
   }
 }
 
+function requireRole(roles) {
+  const allowedRoles = new Set(Array.isArray(roles) ? roles : [roles]);
+  return function checkRole(req, _res, next) {
+    if (!req.auth) {
+      return next(new AppError('Please login first', 401, 'UNAUTHORIZED'));
+    }
+    if (!allowedRoles.has(req.auth.role)) {
+      return next(new AppError('Access denied', 403, 'FORBIDDEN'));
+    }
+    return next();
+  };
+}
+
+const requireSuperAdmin = requireRole('super_admin');
+
 module.exports = {
   requireAuth,
+  requireRole,
+  requireSuperAdmin,
 };
