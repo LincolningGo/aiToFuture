@@ -509,6 +509,7 @@ async function refreshMe(options = {}) {
     if (!snapshotLoaded && lastErr) throw lastErr;
 
     state.ui.authOpen = false;
+    renderAuthState();
     state.history.page = 1;
     state.ledger.page = 1;
     await Promise.all([refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels()]);
