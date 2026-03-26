@@ -6,7 +6,7 @@
     <title>ATF Console</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" href="/favicon.svg" />
-    <link rel="stylesheet" href="/styles.css?v=20260326f" />
+    <link rel="stylesheet" href="/styles.css?v=20260326h" />
   </head>
   <body>
     <div class="bg-shape bg-shape-a"></div>
@@ -30,14 +30,14 @@
 	          <div class="auth-head">
 	            <div>
 	              <h3>ATF</h3>
-	              <p class="auth-subtitle">登录后可查看记录、积分与生成结果</p>
+	              <p id="authSubtitle" class="auth-subtitle">登录后可查看记录、积分与生成结果</p>
 	            </div>
 	            <button id="closeAuthBtn" class="ghost compact" type="button">关闭</button>
 	          </div>
 
 	          <div class="tabs">
 	            <button class="tab active" data-tab="login" type="button">登录</button>
-	            <button class="tab" data-tab="register" type="button">注册</button>
+	            <button id="registerTabBtn" class="tab" data-tab="register" type="button">注册</button>
 	          </div>
 
 	          <p id="authMsg" class="form-msg hidden"></p>
@@ -91,7 +91,7 @@
 	              placeholder="建议使用高强度密码"
 	              autocomplete="new-password"
 	            />
-	            <p class="form-note">注册成功后将自动登录。</p>
+	            <p id="registerFormNote" class="form-note">注册成功后将自动登录。</p>
 	            <div class="form-actions">
 	              <button id="registerSubmitBtn" type="submit">注册</button>
 	            </div>
@@ -226,6 +226,7 @@
 	                <div class="workspace-nav admin-subnav">
 	                  <button id="adminUsersTabBtn" class="nav-chip active" type="button">用户管理</button>
 	                  <button id="adminLogsTabBtn" class="nav-chip" type="button">操作日志</button>
+	                  <button id="adminSettingsTabBtn" class="nav-chip" type="button">系统设置</button>
 	                </div>
 	              </div>
 
@@ -302,6 +303,7 @@
 	                    <option value="enable_user">启用用户</option>
 	                    <option value="disable_user">禁用用户</option>
 	                    <option value="change_role">修改角色</option>
+	                    <option value="update_system_settings">系统设置</option>
 	                  </select>
 	                  <button type="button" id="adminLogSearchBtn" class="ghost compact">查询</button>
 	                </div>
@@ -315,6 +317,32 @@
 	                    <span id="adminLogsPageInfo" class="pager-info">第 1 / 1 页</span>
 	                    <button type="button" id="adminLogsNextBtn" class="ghost compact">下一页</button>
 	                  </div>
+	                </div>
+	              </section>
+
+	              <section id="adminSettingsSection" class="hidden">
+	                <div class="section-head admin-section-head">
+	                  <div>
+	                    <h3>系统设置</h3>
+	                    <p class="hint compact">配置注册开关与新用户初始积分。</p>
+	                  </div>
+	                  <button type="button" id="adminSettingsRefreshBtn" class="ghost compact">刷新设置</button>
+	                </div>
+
+	                <div class="detail-card admin-settings-card">
+	                  <form id="adminSettingsForm" class="admin-settings-form">
+	                    <label class="checkbox-row admin-switch-row">
+	                      <input type="checkbox" id="registerEnabledInput" name="registerEnabled" />
+	                      <span>开放注册</span>
+	                    </label>
+	                    <label>注册赠送积分</label>
+	                    <input id="registerBonusPointsInput" name="registerBonusPoints" type="number" min="0" step="1" />
+	                    <p id="adminSettingsHint" class="hint compact"></p>
+	                    <p id="adminSettingsMsg" class="form-msg hidden"></p>
+	                    <div class="form-actions inline-actions">
+	                      <button id="adminSettingsSubmitBtn" type="submit">保存设置</button>
+	                    </div>
+	                  </form>
 	                </div>
 	              </section>
 	            </div>
@@ -399,6 +427,6 @@
 	      </div>
 	    </div>
 
-	    <script src="/app.js?v=20260326g"></script>
+	    <script src="/app.js?v=20260326h"></script>
   </body>
 </html>

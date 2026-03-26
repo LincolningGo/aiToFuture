@@ -182,6 +182,11 @@ body {
   background: linear-gradient(110deg, #0d8d86 0%, #0a6f6a 100%);
 }
 
+.tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .form {
   display: none;
   gap: 10px;
@@ -532,6 +537,21 @@ button.compact {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.admin-settings-card {
+  background: #fcfefe;
+}
+
+.admin-settings-form {
+  display: grid;
+  gap: 12px;
+  max-width: 520px;
+}
+
+.admin-switch-row {
+  font-weight: 700;
+  color: var(--text);
 }
 
 .meta-row {

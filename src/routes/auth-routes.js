@@ -6,6 +6,7 @@ const { pool } = require('../db/mysql');
 const { AppError } = require('../utils/errors');
 const { createRateLimit } = require('../middleware/rate-limit');
 const { validateRegisterInput } = require('../utils/validators');
+const { getSystemSettings } = require('../services/system-settings');
 
 const router = express.Router();
 const loginRateLimit = createRateLimit({
@@ -53,6 +54,11 @@ function setAuthCookie(req, res, token) {
 
 router.post('/register', registerRateLimit, async (req, res, next) => {
   try {
+    const systemSettings = await getSystemSettings();
+    if (!systemSettings.registerEnabled) {
+      throw new AppError('Registration is currently disabled', 403, 'REGISTRATION_DISABLED');
+    }
+
     const { username, email, password } = req.body || {};
     const normalizedUsername = String(username || '').trim();
     const normalizedEmail = String(email || '').trim().toLowerCase();
@@ -84,16 +90,23 @@ router.post('/register', registerRateLimit, async (req, res, next) => {
         `INSERT INTO users
          (username, email, role, password_hash, points)
          VALUES (?, ?, 'user', ?, ?)`,
-        [normalizedUsername, normalizedEmail, passwordHash, config.defaultRegisterPoints],
+        [normalizedUsername, normalizedEmail, passwordHash, systemSettings.registerBonusPoints],
       );
       userId = insertUser.insertId;
 
-      await conn.query(
-        `INSERT INTO points_ledger
-         (user_id, change_amount, balance_after, reason, reference_type, reference_id)
-         VALUES (?, ?, ?, 'REGISTER_BONUS', 'user', ?)`,
-        [userId, config.defaultRegisterPoints, config.defaultRegisterPoints, String(userId)],
-      );
+      if (systemSettings.registerBonusPoints > 0) {
+        await conn.query(
+          `INSERT INTO points_ledger
+           (user_id, change_amount, balance_after, reason, reference_type, reference_id)
+           VALUES (?, ?, ?, 'REGISTER_BONUS', 'user', ?)`,
+          [
+            userId,
+            systemSettings.registerBonusPoints,
+            systemSettings.registerBonusPoints,
+            String(userId),
+          ],
+        );
+      }
 
       await conn.commit();
     } catch (err) {
@@ -108,7 +121,7 @@ router.post('/register', registerRateLimit, async (req, res, next) => {
       username: normalizedUsername,
       email: normalizedEmail,
       role: 'user',
-      points: config.defaultRegisterPoints,
+      points: systemSettings.registerBonusPoints,
     };
 
     const token = signToken(user);
@@ -118,6 +131,21 @@ router.post('/register', registerRateLimit, async (req, res, next) => {
       success: true,
       data: {
         user,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/register-config', async (_req, res, next) => {
+  try {
+    const systemSettings = await getSystemSettings();
+    res.json({
+      success: true,
+      data: {
+        registerEnabled: systemSettings.registerEnabled,
+        registerBonusPoints: systemSettings.registerBonusPoints,
       },
     });
   } catch (err) {

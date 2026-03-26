@@ -2,6 +2,7 @@ const express = require('express');
 const { pool } = require('../db/mysql');
 const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
 const { AppError } = require('../utils/errors');
+const { getSystemSettings, updateSystemSettings } = require('../services/system-settings');
 
 const router = express.Router();
 const USER_ROLES = new Set(['user', 'super_admin']);
@@ -11,6 +12,7 @@ const ADMIN_ACTION_TYPES = new Set([
   'enable_user',
   'disable_user',
   'change_role',
+  'update_system_settings',
 ]);
 
 function normalizePage(value, fallback = 1) {
@@ -216,6 +218,78 @@ router.get('/action-logs', async (req, res, next) => {
         },
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/system-settings', async (_req, res, next) => {
+  try {
+    const systemSettings = await getSystemSettings();
+    res.json({
+      success: true,
+      data: systemSettings,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch('/system-settings', async (req, res, next) => {
+  try {
+    const registerEnabled = toBooleanStrict(req.body?.registerEnabled);
+    const registerBonusPoints = Number.parseInt(req.body?.registerBonusPoints, 10);
+
+    if (registerEnabled === null) {
+      throw new AppError('registerEnabled must be a boolean', 400, 'INVALID_REGISTER_ENABLED');
+    }
+    if (!Number.isInteger(registerBonusPoints) || registerBonusPoints < 0 || registerBonusPoints > 1000000) {
+      throw new AppError(
+        'registerBonusPoints must be between 0 and 1000000',
+        400,
+        'INVALID_REGISTER_BONUS_POINTS',
+      );
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const beforeSettings = await getSystemSettings(conn);
+      const nextSettings = await updateSystemSettings({ registerEnabled, registerBonusPoints }, conn);
+
+      const changed =
+        beforeSettings.registerEnabled !== nextSettings.registerEnabled ||
+        beforeSettings.registerBonusPoints !== nextSettings.registerBonusPoints;
+
+      if (changed) {
+        const note = [
+          `registerEnabled: ${beforeSettings.registerEnabled ? 'on' : 'off'} -> ${nextSettings.registerEnabled ? 'on' : 'off'}`,
+          `registerBonusPoints: ${beforeSettings.registerBonusPoints} -> ${nextSettings.registerBonusPoints}`,
+        ].join(' | ');
+
+        await conn.query(
+          `INSERT INTO admin_action_logs
+           (admin_user_id, target_user_id, action_type, change_amount, before_value, after_value, note)
+           VALUES (?, ?, 'update_system_settings', NULL, NULL, NULL, ?)`,
+          [req.auth.userId, req.auth.userId, note.slice(0, 255)],
+        );
+      }
+
+      await conn.commit();
+
+      res.json({
+        success: true,
+        data: {
+          changed,
+          ...nextSettings,
+        },
+      });
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
   } catch (err) {
     next(err);
   }

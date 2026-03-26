@@ -22,6 +22,7 @@ const ADMIN_ACTION_LABELS = {
   enable_user: '启用用户',
   disable_user: '禁用用户',
   change_role: '修改角色',
+  update_system_settings: '更新系统设置',
 };
 
 const QUICK_PROMPTS = {
@@ -87,12 +88,21 @@ const state = {
     actionType: '',
     items: [],
   },
+  systemSettings: {
+    registerEnabled: true,
+    registerBonusPoints: 100,
+  },
+  publicAuthSettings: {
+    registerEnabled: true,
+    registerBonusPoints: 100,
+  },
   ui: {
     authOpen: false,
     jobPollTimer: null,
     jobPollBusy: false,
     view: 'console',
     adminSection: 'users',
+    registerEnabledLoaded: false,
     pointsModalOpen: false,
     pointsTargetUser: null,
     roleModalOpen: false,
@@ -108,6 +118,7 @@ const els = {
   workspace: document.getElementById('workspace'),
   globalMsg: document.getElementById('globalMsg'),
   authMsg: document.getElementById('authMsg'),
+  authSubtitle: document.getElementById('authSubtitle'),
   sessionHint: document.getElementById('sessionHint'),
   authActionBtn: document.getElementById('authActionBtn'),
   workspaceNav: document.getElementById('workspaceNav'),
@@ -117,12 +128,16 @@ const els = {
   adminView: document.getElementById('adminView'),
   adminUsersTabBtn: document.getElementById('adminUsersTabBtn'),
   adminLogsTabBtn: document.getElementById('adminLogsTabBtn'),
+  adminSettingsTabBtn: document.getElementById('adminSettingsTabBtn'),
   adminUsersSection: document.getElementById('adminUsersSection'),
   adminLogsSection: document.getElementById('adminLogsSection'),
+  adminSettingsSection: document.getElementById('adminSettingsSection'),
   loginForm: document.getElementById('loginForm'),
   registerForm: document.getElementById('registerForm'),
   loginSubmitBtn: document.getElementById('loginSubmitBtn'),
   registerSubmitBtn: document.getElementById('registerSubmitBtn'),
+  registerTabBtn: document.getElementById('registerTabBtn'),
+  registerFormNote: document.getElementById('registerFormNote'),
   tabs: [...document.querySelectorAll('.tab')],
   welcomeText: document.getElementById('welcomeText'),
   pointsText: document.getElementById('pointsText'),
@@ -173,6 +188,13 @@ const els = {
   adminLogsPrevBtn: document.getElementById('adminLogsPrevBtn'),
   adminLogsNextBtn: document.getElementById('adminLogsNextBtn'),
   adminLogsPageInfo: document.getElementById('adminLogsPageInfo'),
+  adminSettingsRefreshBtn: document.getElementById('adminSettingsRefreshBtn'),
+  adminSettingsForm: document.getElementById('adminSettingsForm'),
+  registerEnabledInput: document.getElementById('registerEnabledInput'),
+  registerBonusPointsInput: document.getElementById('registerBonusPointsInput'),
+  adminSettingsHint: document.getElementById('adminSettingsHint'),
+  adminSettingsMsg: document.getElementById('adminSettingsMsg'),
+  adminSettingsSubmitBtn: document.getElementById('adminSettingsSubmitBtn'),
   previewModal: document.getElementById('previewModal'),
   previewBackdrop: document.getElementById('previewBackdrop'),
   previewCloseBtn: document.getElementById('previewCloseBtn'),
@@ -272,12 +294,45 @@ function setRoleFormMsg(msg, type = 'error') {
   els.roleFormMsg.dataset.type = normalized.length === 0 ? '' : type;
 }
 
+function setAdminSettingsMsg(msg, type = 'error') {
+  const normalized = String(msg || '').trim();
+  els.adminSettingsMsg.textContent = normalized;
+  els.adminSettingsMsg.classList.toggle('hidden', normalized.length === 0);
+  els.adminSettingsMsg.dataset.type = normalized.length === 0 ? '' : type;
+}
+
 function getRoleLabel(role) {
   return role === 'super_admin' ? '超级管理员' : '普通用户';
 }
 
 function getAdminActionLabel(actionType) {
   return ADMIN_ACTION_LABELS[actionType] || actionType || '-';
+}
+
+function renderRegisterAvailability() {
+  const { registerEnabled, registerBonusPoints } = state.publicAuthSettings;
+  state.ui.registerEnabledLoaded = true;
+  els.registerTabBtn.disabled = !registerEnabled;
+  els.registerTabBtn.classList.toggle('hidden', !registerEnabled);
+  els.registerForm.classList.toggle('hidden', !registerEnabled);
+  els.registerSubmitBtn.disabled = !registerEnabled;
+  els.authSubtitle.textContent = registerEnabled
+    ? '登录后可查看记录、积分与生成结果'
+    : '当前已关闭注册，仅支持已有账号登录';
+  els.registerFormNote.textContent = registerEnabled
+    ? `注册成功后将自动登录。当前注册赠送 ${registerBonusPoints} 积分。`
+    : '当前已关闭注册。';
+
+  if (!registerEnabled && els.registerForm.classList.contains('active')) {
+    showTab('login');
+  }
+}
+
+function renderAdminSettingsForm() {
+  els.registerEnabledInput.checked = Boolean(state.systemSettings.registerEnabled);
+  els.registerBonusPointsInput.value = String(state.systemSettings.registerBonusPoints ?? 0);
+  els.adminSettingsHint.textContent = `当前状态：${state.systemSettings.registerEnabled ? '开放注册' : '关闭注册'} ｜ 注册赠送 ${state.systemSettings.registerBonusPoints} 积分`;
+  setAdminSettingsMsg('');
 }
 
 function describeAdminAction(row) {
@@ -377,6 +432,9 @@ function ensureJobPolling(enabled, immediate = false) {
 }
 
 function showTab(tab) {
+  if (tab === 'register' && state.publicAuthSettings.registerEnabled === false) {
+    tab = 'login';
+  }
   els.tabs.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
   els.loginForm.classList.toggle('active', tab === 'login');
   els.registerForm.classList.toggle('active', tab === 'register');
@@ -435,11 +493,14 @@ function renderViewState() {
 function renderAdminSectionState() {
   const showUsers = isSuperAdmin() && state.ui.view === 'admin' && state.ui.adminSection === 'users';
   const showLogs = isSuperAdmin() && state.ui.view === 'admin' && state.ui.adminSection === 'logs';
+  const showSettings = isSuperAdmin() && state.ui.view === 'admin' && state.ui.adminSection === 'settings';
 
   els.adminUsersTabBtn.classList.toggle('active', showUsers);
   els.adminLogsTabBtn.classList.toggle('active', showLogs);
+  els.adminSettingsTabBtn.classList.toggle('active', showSettings);
   els.adminUsersSection.classList.toggle('hidden', !showUsers);
   els.adminLogsSection.classList.toggle('hidden', !showLogs);
+  els.adminSettingsSection.classList.toggle('hidden', !showSettings);
   if (!isSuperAdmin() || state.ui.view !== 'admin') {
     els.adminSummary.textContent = '';
   } else if (showUsers) {
@@ -450,6 +511,8 @@ function renderAdminSectionState() {
     els.adminSummary.textContent = state.adminLogs.total > 0
       ? `共 ${state.adminLogs.total} 条日志，当前每页 ${state.adminLogs.limit} 条。`
       : '暂无匹配日志。';
+  } else if (showSettings) {
+    els.adminSummary.textContent = `注册：${state.systemSettings.registerEnabled ? '开放' : '关闭'} ｜ 新用户积分：${state.systemSettings.registerBonusPoints}`;
   }
 }
 
@@ -826,6 +889,43 @@ async function refreshUserSnapshot() {
   return data;
 }
 
+async function refreshRegisterConfig() {
+  try {
+    const data = await api('/api/auth/register-config');
+    state.publicAuthSettings = {
+      registerEnabled: Boolean(data?.registerEnabled),
+      registerBonusPoints: Math.max(Number(data?.registerBonusPoints) || 0, 0),
+    };
+  } catch (_err) {
+    state.publicAuthSettings = {
+      registerEnabled: true,
+      registerBonusPoints: 100,
+    };
+  }
+
+  renderRegisterAvailability();
+}
+
+async function refreshAdminSystemSettings() {
+  if (!isSuperAdmin()) {
+    state.systemSettings = {
+      registerEnabled: state.publicAuthSettings.registerEnabled,
+      registerBonusPoints: state.publicAuthSettings.registerBonusPoints,
+    };
+    renderAdminSettingsForm();
+    renderAdminSectionState();
+    return;
+  }
+
+  const data = await api('/api/admin/system-settings');
+  state.systemSettings = {
+    registerEnabled: Boolean(data?.registerEnabled),
+    registerBonusPoints: Math.max(Number(data?.registerBonusPoints) || 0, 0),
+  };
+  renderAdminSettingsForm();
+  renderAdminSectionState();
+}
+
 async function refreshMe(options = {}) {
   const authJustSet = Boolean(options.authJustSet);
   const fallbackUser = options.fallbackUser || null;
@@ -859,9 +959,10 @@ async function refreshMe(options = {}) {
     renderAuthState();
     state.history.page = 1;
     state.ledger.page = 1;
-    const tasks = [refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels()];
+    const tasks = [refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels(), refreshRegisterConfig()];
     if (isSuperAdmin()) {
       tasks.push(refreshAdminUsers({ page: 1 }));
+      tasks.push(refreshAdminSystemSettings());
     }
     await Promise.all(tasks);
     updatePromptCounter();
@@ -875,6 +976,7 @@ async function refreshMe(options = {}) {
     closeAdminDetailModal();
     closePointsModal();
     closeRoleModal();
+    await refreshRegisterConfig();
     state.adminUsers = {
       ...state.adminUsers,
       page: 1,
@@ -892,11 +994,16 @@ async function refreshMe(options = {}) {
       actionType: '',
       items: [],
     };
+    state.systemSettings = {
+      registerEnabled: state.publicAuthSettings.registerEnabled,
+      registerBonusPoints: state.publicAuthSettings.registerBonusPoints,
+    };
     state.ui.view = 'console';
     state.ui.adminSection = 'users';
     state.history = { ...state.history, page: 1, total: 0, totalPages: 1, hasRunningJobs: false };
     state.ledger = { ...state.ledger, page: 1, total: 0, totalPages: 1 };
     renderAuthState();
+    renderAdminSettingsForm();
     await Promise.all([refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels()]);
     updatePromptCounter();
   }
@@ -1328,12 +1435,18 @@ async function handleLogout() {
     actionType: '',
     items: [],
   };
+  await refreshRegisterConfig();
+  state.systemSettings = {
+    registerEnabled: state.publicAuthSettings.registerEnabled,
+    registerBonusPoints: state.publicAuthSettings.registerBonusPoints,
+  };
   state.ui.authOpen = false;
   state.ui.view = 'console';
   state.ui.adminSection = 'users';
   state.history = { ...state.history, page: 1, total: 0, totalPages: 1, hasRunningJobs: false };
   state.ledger = { ...state.ledger, page: 1, total: 0, totalPages: 1 };
   renderAuthState();
+  renderAdminSettingsForm();
   await Promise.all([
     refreshHistory({ page: 1 }),
     refreshLedger({ page: 1 }),
@@ -1368,6 +1481,8 @@ els.adminNavBtn.addEventListener('click', async () => {
   try {
     if (state.ui.adminSection === 'logs') {
       await refreshAdminLogs();
+    } else if (state.ui.adminSection === 'settings') {
+      await refreshAdminSystemSettings();
     } else {
       await refreshAdminUsers();
     }
@@ -1393,6 +1508,17 @@ els.adminLogsTabBtn.addEventListener('click', async () => {
   renderViewState();
   try {
     await refreshAdminLogs();
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminSettingsTabBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  state.ui.adminSection = 'settings';
+  renderViewState();
+  try {
+    await refreshAdminSystemSettings();
   } catch (err) {
     setGlobalMsg(err.message);
   }
@@ -1443,6 +1569,14 @@ els.registerForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   setGlobalMsg('');
   setAuthMsg('');
+
+  if (state.publicAuthSettings.registerEnabled === false) {
+    const message = '当前已关闭注册';
+    showTab('login');
+    setAuthMsg(message);
+    setGlobalMsg(message);
+    return;
+  }
 
   const fd = new FormData(els.registerForm);
   const username = String(fd.get('username') || '').trim();
@@ -1535,6 +1669,15 @@ els.adminLogsRefreshBtn.addEventListener('click', async () => {
   if (!isSuperAdmin()) return;
   try {
     await refreshAdminLogs({ page: 1 });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminSettingsRefreshBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  try {
+    await refreshAdminSystemSettings();
   } catch (err) {
     setGlobalMsg(err.message);
   }
@@ -1783,6 +1926,46 @@ els.roleForm.addEventListener('submit', async (event) => {
   }
 });
 
+els.adminSettingsForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!isSuperAdmin()) {
+    setAdminSettingsMsg('仅超级管理员可修改');
+    return;
+  }
+
+  const registerEnabled = els.registerEnabledInput.checked;
+  const registerBonusPoints = Number.parseInt(els.registerBonusPointsInput.value, 10);
+  if (!Number.isInteger(registerBonusPoints) || registerBonusPoints < 0) {
+    setAdminSettingsMsg('注册赠送积分必须是大于等于 0 的整数');
+    return;
+  }
+
+  try {
+    setButtonLoading(els.adminSettingsSubmitBtn, '保存中...', true);
+    setAdminSettingsMsg('');
+    const result = await api('/api/admin/system-settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ registerEnabled, registerBonusPoints }),
+    });
+    state.systemSettings = {
+      registerEnabled: Boolean(result?.registerEnabled),
+      registerBonusPoints: Math.max(Number(result?.registerBonusPoints) || 0, 0),
+    };
+    await refreshRegisterConfig();
+    renderAdminSettingsForm();
+    renderAdminSectionState();
+    setAdminSettingsMsg(result?.changed ? '系统设置已更新' : '配置未发生变化', 'success');
+    if (state.ui.adminSection === 'logs') {
+      await refreshAdminLogs();
+    }
+  } catch (err) {
+    setAdminSettingsMsg(err.message);
+  } finally {
+    setButtonLoading(els.adminSettingsSubmitBtn, '保存中...', false);
+  }
+});
+
 els.generateForm.addEventListener('submit', async (event) => {
   event.preventDefault();
 
@@ -1869,5 +2052,8 @@ showTab('login');
 updateCapabilityInputs();
 renderModelOptions();
 updatePromptCounter();
+renderRegisterAvailability();
+renderAdminSettingsForm();
 renderAuthState();
+refreshRegisterConfig();
 refreshMe();

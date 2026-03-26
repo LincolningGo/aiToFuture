@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS admin_action_logs (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   admin_user_id BIGINT UNSIGNED NOT NULL,
   target_user_id BIGINT UNSIGNED NOT NULL,
-  action_type ENUM('grant_points', 'deduct_points', 'enable_user', 'disable_user', 'change_role') NOT NULL,
+  action_type ENUM('grant_points', 'deduct_points', 'enable_user', 'disable_user', 'change_role', 'update_system_settings') NOT NULL,
   change_amount INT DEFAULT NULL,
   before_value INT DEFAULT NULL,
   after_value INT DEFAULT NULL,
@@ -45,6 +45,13 @@ CREATE TABLE IF NOT EXISTS admin_action_logs (
   KEY idx_admin_action_target (target_user_id, created_at),
   CONSTRAINT fk_admin_action_admin_user FOREIGN KEY (admin_user_id) REFERENCES users(id),
   CONSTRAINT fk_admin_action_target_user FOREIGN KEY (target_user_id) REFERENCES users(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS system_settings (
+  setting_key VARCHAR(64) NOT NULL,
+  setting_value VARCHAR(255) NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (setting_key)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS ai_models (
@@ -149,3 +156,9 @@ ON DUPLICATE KEY UPDATE
   is_default = VALUES(is_default),
   is_active = VALUES(is_active),
   metadata_json = VALUES(metadata_json);
+
+INSERT INTO system_settings (setting_key, setting_value) VALUES
+('register_enabled', '1'),
+('register_bonus_points', '100')
+ON DUPLICATE KEY UPDATE
+  setting_value = VALUES(setting_value);
