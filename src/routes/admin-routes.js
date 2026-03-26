@@ -328,48 +328,69 @@ router.get('/users/:userId', async (req, res, next) => {
       [targetUserId],
     );
 
-    const [generationRows] = await pool.query(
-      `SELECT j.job_uuid, j.capability, j.provider, j.model_code, j.model_name,
-              j.status, j.cost_points, j.prompt_text, j.error_message, j.created_at,
-              o.file_type, o.public_url, o.metadata_json AS output_metadata
+    const [jobRows] = await pool.query(
+      `SELECT j.id, j.job_uuid, j.capability, j.provider, j.model_code, j.model_name,
+              j.status, j.cost_points, j.prompt_text, j.error_message, j.created_at
        FROM generation_jobs j
-       LEFT JOIN generation_outputs o ON o.job_id = j.id
        WHERE j.user_id = ?
        ORDER BY j.created_at DESC
        LIMIT 6`,
       [targetUserId],
     );
 
-    const recentGenerations = generationRows.map((row) => {
+    const jobIds = jobRows.map((row) => row.id);
+    let outputRows = [];
+    if (jobIds.length > 0) {
+      const [rows] = await pool.query(
+        `SELECT job_id, file_type, public_url, metadata_json, created_at
+         FROM generation_outputs
+         WHERE job_id IN (?)
+         ORDER BY created_at ASC, id ASC`,
+        [jobIds],
+      );
+      outputRows = rows;
+    }
+
+    const outputsByJobId = outputRows.reduce((acc, row) => {
+      if (!acc[row.job_id]) acc[row.job_id] = [];
+
       let outputPreviewText = null;
-      if (row.output_metadata) {
+      let parsedMetadata = null;
+      if (row.metadata_json) {
         try {
-          const metadata =
-            typeof row.output_metadata === 'string' ? JSON.parse(row.output_metadata) : row.output_metadata;
-          if (metadata && typeof metadata.textPreview === 'string' && metadata.textPreview.trim()) {
-            outputPreviewText = metadata.textPreview.trim();
+          parsedMetadata = typeof row.metadata_json === 'string' ? JSON.parse(row.metadata_json) : row.metadata_json;
+          if (parsedMetadata && typeof parsedMetadata.textPreview === 'string' && parsedMetadata.textPreview.trim()) {
+            outputPreviewText = parsedMetadata.textPreview.trim();
           }
         } catch (_err) {
+          parsedMetadata = null;
           outputPreviewText = null;
         }
       }
 
-      return {
-        job_uuid: row.job_uuid,
-        capability: row.capability,
-        provider: row.provider,
-        model_code: row.model_code,
-        model_name: row.model_name,
-        status: row.status,
-        cost_points: row.cost_points,
-        prompt_text: row.prompt_text,
-        error_message: row.error_message,
-        created_at: row.created_at,
+      acc[row.job_id].push({
         file_type: row.file_type,
         public_url: row.public_url,
         output_preview_text: outputPreviewText,
-      };
-    });
+        metadata: parsedMetadata,
+        created_at: row.created_at,
+      });
+      return acc;
+    }, {});
+
+    const recentGenerations = jobRows.map((row) => ({
+      job_uuid: row.job_uuid,
+      capability: row.capability,
+      provider: row.provider,
+      model_code: row.model_code,
+      model_name: row.model_name,
+      status: row.status,
+      cost_points: row.cost_points,
+      prompt_text: row.prompt_text,
+      error_message: row.error_message,
+      created_at: row.created_at,
+      outputs: outputsByJobId[row.id] || [],
+    }));
 
     res.json({
       success: true,

@@ -669,6 +669,25 @@ function closeAdminDetailModal() {
   els.adminDetailModal.classList.add('hidden');
 }
 
+function buildAdminPreviewPayload(job, output = null) {
+  return {
+    capability: job.capability,
+    model_name: job.model_name,
+    model_code: job.model_code,
+    file_type: output?.file_type || 'text',
+    public_url: output?.public_url || '',
+    output_preview_text: output?.output_preview_text || '',
+  };
+}
+
+function getJobStatusClass(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (['completed', 'failed', 'processing', 'queued'].includes(normalized)) {
+    return normalized;
+  }
+  return '';
+}
+
 function renderAdminDetail(data) {
   const user = data?.user || null;
   const summary = data?.summary || {};
@@ -687,9 +706,13 @@ function renderAdminDetail(data) {
     ? ledgerItems
         .map(
           (row) => `
-            <div class="detail-list-item">
-              <p><strong>${escapeHtml(row.reason)}</strong> · ${row.change_amount > 0 ? '+' : ''}${escapeHtml(row.change_amount)}</p>
-              <p>余额：${escapeHtml(row.balance_after)} · ${formatTime(row.created_at)}</p>
+            <div class="detail-list-item detail-ledger-item">
+              <div class="detail-ledger-head">
+                <strong>${escapeHtml(row.reason)}</strong>
+                <span class="detail-ledger-delta ${row.change_amount >= 0 ? 'up' : 'down'}">${row.change_amount > 0 ? '+' : ''}${escapeHtml(row.change_amount)}</span>
+              </div>
+              <p>余额：${escapeHtml(row.balance_after)}</p>
+              <p>${formatTime(row.created_at)}</p>
             </div>
           `,
         )
@@ -699,51 +722,69 @@ function renderAdminDetail(data) {
   const generationHtml = generationItems.length
     ? generationItems
         .map((row, index) => {
-          const mediaUrl = getSafeMediaUrl(row.public_url);
-          let previewHtml = '';
-          let actionHtml = '';
-          if (row.file_type === 'image' && mediaUrl) {
-            previewHtml = `<div class="detail-output-preview" data-preview-index="${index}"><div class="hint compact">加载预览中...</div></div>`;
-          } else if (row.file_type === 'video' && mediaUrl) {
-            previewHtml = `<div class="detail-output-preview" data-preview-index="${index}"><div class="hint compact">加载预览中...</div></div>`;
-          } else if (row.file_type === 'audio' && mediaUrl) {
-            previewHtml = `<div class="detail-output-preview" data-preview-index="${index}"><div class="hint compact">加载预览中...</div></div>`;
-          } else if (row.file_type === 'text' && row.output_preview_text) {
-            previewHtml = `<div class="detail-output-preview text"><pre>${escapeHtml(row.output_preview_text)}</pre></div>`;
-          }
-          const previewLink = mediaUrl
-            ? `<a class="detail-link" href="${mediaUrl}" target="_blank" rel="noreferrer">查看结果</a>`
-            : '';
-          if (row.file_type !== 'text' && mediaUrl) {
-            actionHtml = `
-              <div class="detail-action-row">
-                <button type="button" class="ghost compact admin-detail-preview-btn" data-index="${index}">预览</button>
-                <a class="ghost compact detail-link-btn" href="${mediaUrl}" download target="_blank" rel="noreferrer">下载</a>
+          const outputs = Array.isArray(row.outputs) ? row.outputs : [];
+          const outputsHtml = outputs.length
+            ? outputs
+                .map((output, outputIndex) => {
+                  const mediaUrl = getSafeMediaUrl(output.public_url);
+                  const canPreview = Boolean(mediaUrl) || output.file_type === 'text';
+                  const previewPayload = buildAdminPreviewPayload(row, output);
+                  const inlinePreview =
+                    output.file_type === 'text' && output.output_preview_text
+                      ? `<div class="detail-output-preview text"><pre>${escapeHtml(output.output_preview_text)}</pre></div>`
+                      : `<div class="detail-output-preview" data-job-index="${index}" data-output-index="${outputIndex}"><div class="hint compact">加载预览中...</div></div>`;
+                  return `
+                    <article class="admin-output-card">
+                      <div class="admin-output-head">
+                        <span class="status-badge">${escapeHtml(output.file_type || 'file')}</span>
+                        <span class="hint compact">结果 ${outputIndex + 1}</span>
+                      </div>
+                      ${inlinePreview}
+                      <div class="detail-action-row">
+                        ${canPreview ? `<button type="button" class="ghost compact admin-detail-preview-btn" data-job-index="${index}" data-output-index="${outputIndex}">预览</button>` : ''}
+                        ${mediaUrl ? `<a class="ghost compact detail-link-btn" href="${mediaUrl}" download target="_blank" rel="noreferrer">下载</a>` : ''}
+                      </div>
+                    </article>
+                  `;
+                })
+                .join('')
+            : `
+              <div class="admin-output-empty">
+                <div class="job-preview progress">
+                  <div class="progress-bar"><div class="progress-fill" style="width:${row.status === 'processing' ? 68 : 30}%"></div></div>
+                  <div class="hint compact">${row.status === 'processing' ? '处理中' : row.status === 'queued' ? '排队中' : row.status === 'failed' ? '生成失败' : '暂无输出'}</div>
+                </div>
               </div>
             `;
-          } else if (row.file_type === 'text') {
-            actionHtml = `
-              <div class="detail-action-row">
-                <button type="button" class="ghost compact admin-detail-preview-btn" data-index="${index}">预览</button>
-              </div>
-            `;
-          }
+
           return `
-            <div class="detail-list-item">
-              <p><strong>${escapeHtml(CAPABILITY_LABELS[row.capability] || row.capability)}</strong> · ${escapeHtml(row.model_name || row.model_code || '-')}</p>
-              <p>状态：${escapeHtml(row.status)} · 消耗：${escapeHtml(row.cost_points)} · ${formatTime(row.created_at)}</p>
-              <p class="detail-prompt">${escapeHtml(row.prompt_text || '')}</p>
-              ${previewHtml}
-              ${actionHtml}
-              ${previewLink}
-            </div>
+            <article class="detail-list-item admin-job-card">
+              <div class="admin-job-head">
+                <div>
+                  <strong>${escapeHtml(CAPABILITY_LABELS[row.capability] || row.capability)}</strong>
+                  <p class="admin-job-model">${escapeHtml(row.model_name || row.model_code || '-')}</p>
+                </div>
+                <div class="admin-job-tags">
+                  <span class="status-badge ${getJobStatusClass(row.status)}">${escapeHtml(row.status)}</span>
+                  <span class="status-badge">消耗 ${escapeHtml(row.cost_points)}</span>
+                </div>
+              </div>
+              <div class="admin-job-meta">
+                <span>任务号：${escapeHtml(row.job_uuid)}</span>
+                <span>时间：${formatTime(row.created_at)}</span>
+                <span>结果数：${outputs.length}</span>
+              </div>
+              <p class="detail-prompt admin-job-prompt">${escapeHtml(row.prompt_text || '')}</p>
+              ${row.error_message ? `<p class="job-error">错误：${escapeHtml(row.error_message)}</p>` : ''}
+              <div class="admin-output-grid">${outputsHtml}</div>
+            </article>
           `;
         })
         .join('')
     : '<p class="hint compact">暂无生成记录</p>';
 
   els.adminDetailBody.innerHTML = `
-    <div class="admin-detail-top">
+    <section class="admin-detail-top">
       <div class="stat-card">
         <span class="stat-label">用户ID</span>
         <strong>#${escapeHtml(user.id)}</strong>
@@ -760,14 +801,21 @@ function renderAdminDetail(data) {
         <span class="stat-label">状态</span>
         <strong>${user.is_active ? '启用' : '禁用'}</strong>
       </div>
-    </div>
-    <div class="admin-detail-meta">
+    </section>
+    <section class="detail-card admin-detail-overview">
+      <div class="section-head">
+        <div>
+          <h3>账户概览</h3>
+        </div>
+      </div>
+      <div class="admin-detail-meta">
       <p>用户名：${escapeHtml(user.username)}</p>
       <p>邮箱：${escapeHtml(user.email)}</p>
       <p>注册时间：${formatTime(user.created_at)}</p>
       <p>更新时间：${formatTime(user.updated_at)}</p>
       <p>总生成次数：${escapeHtml(summary.generationTotal || 0)} · 积分流水：${escapeHtml(summary.ledgerTotal || 0)}</p>
-    </div>
+      </div>
+    </section>
     <div class="admin-detail-grid">
       <section class="detail-card">
         <div class="section-head">
@@ -790,17 +838,20 @@ function renderAdminDetail(data) {
 
   els.adminDetailBody.querySelectorAll('.admin-detail-preview-btn').forEach((button) => {
     button.addEventListener('click', () => {
-      const index = Number.parseInt(button.dataset.index, 10);
-      const row = state.ui.adminDetailGenerations[index];
-      if (row) openPreview(row);
+      const jobIndex = Number.parseInt(button.dataset.jobIndex, 10);
+      const outputIndex = Number.parseInt(button.dataset.outputIndex, 10);
+      const job = state.ui.adminDetailGenerations[jobIndex];
+      const output = job?.outputs?.[outputIndex] || null;
+      if (job) void openPreview(buildAdminPreviewPayload(job, output));
     });
   });
 
-  els.adminDetailBody.querySelectorAll('.detail-output-preview[data-preview-index]').forEach((container) => {
-    const index = Number.parseInt(container.dataset.previewIndex, 10);
-    const row = state.ui.adminDetailGenerations[index];
-    if (row) {
-      void hydrateProtectedPreview(container, row);
+  els.adminDetailBody.querySelectorAll('.detail-output-preview[data-job-index]').forEach((container) => {
+    const jobIndex = Number.parseInt(container.dataset.jobIndex, 10);
+    const outputIndex = Number.parseInt(container.dataset.outputIndex, 10);
+    const output = state.ui.adminDetailGenerations[jobIndex]?.outputs?.[outputIndex];
+    if (output && output.file_type !== 'text') {
+      void hydrateProtectedPreview(container, output);
     }
   });
 }

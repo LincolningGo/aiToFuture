@@ -829,9 +829,15 @@ button.compact {
   gap: 10px;
 }
 
+.admin-detail-overview {
+  display: grid;
+  gap: 10px;
+}
+
 .admin-detail-meta {
   display: grid;
-  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
   color: var(--muted);
 }
 
@@ -866,6 +872,29 @@ button.compact {
 
 .detail-list-item p {
   margin: 4px 0;
+}
+
+.detail-ledger-item {
+  gap: 4px;
+}
+
+.detail-ledger-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.detail-ledger-delta {
+  font-weight: 700;
+}
+
+.detail-ledger-delta.up {
+  color: #0b7a75;
+}
+
+.detail-ledger-delta.down {
+  color: #a74309;
 }
 
 .detail-link {
@@ -919,6 +948,74 @@ button.compact {
   gap: 8px;
   margin-top: 8px;
   flex-wrap: wrap;
+}
+
+.admin-job-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfefe 100%);
+}
+
+.admin-job-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.admin-job-model {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-job-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-job-prompt {
+  margin: 0;
+}
+
+.admin-output-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-output-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: #fdfefe;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-output-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-output-empty {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  background: #fcfefe;
 }
 
 .detail-link-btn {
@@ -1099,6 +1196,11 @@ button.compact {
   .admin-detail-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .admin-output-grid,
+  .admin-detail-meta {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 560px) {
@@ -1155,6 +1257,11 @@ button.compact {
     grid-template-columns: 1fr;
   }
 
+  .admin-output-grid,
+  .admin-detail-meta {
+    grid-template-columns: 1fr;
+  }
+
   .meta-row {
     flex-direction: column;
     align-items: flex-start;
@@ -1197,6 +1304,7 @@ button.compact {
   .workspace-nav,
   .admin-user-head,
   .admin-log-topline,
+  .admin-job-head,
   .section-foot {
     flex-direction: column;
     align-items: stretch;
