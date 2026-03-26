@@ -902,6 +902,20 @@ button.compact {
   font-size: 13px;
 }
 
+.detail-action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.detail-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .inline-actions {
   display: flex;
   justify-content: flex-end;

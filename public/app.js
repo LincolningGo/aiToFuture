@@ -109,6 +109,7 @@ const state = {
     roleTargetUser: null,
     adminDetailOpen: false,
     adminDetailUserId: null,
+    adminDetailGenerations: [],
   },
 };
 
@@ -608,6 +609,7 @@ function closeRoleModal() {
 function closeAdminDetailModal() {
   state.ui.adminDetailOpen = false;
   state.ui.adminDetailUserId = null;
+  state.ui.adminDetailGenerations = [];
   els.adminDetailModal.classList.add('hidden');
 }
 
@@ -616,6 +618,7 @@ function renderAdminDetail(data) {
   const summary = data?.summary || {};
   const ledgerItems = Array.isArray(data?.recentLedger) ? data.recentLedger : [];
   const generationItems = Array.isArray(data?.recentGenerations) ? data.recentGenerations : [];
+  state.ui.adminDetailGenerations = generationItems;
 
   if (!user) {
     els.adminDetailBody.innerHTML = '<p class="hint">未找到用户信息</p>';
@@ -639,9 +642,10 @@ function renderAdminDetail(data) {
 
   const generationHtml = generationItems.length
     ? generationItems
-        .map((row) => {
+        .map((row, index) => {
           const mediaUrl = getSafeMediaUrl(row.public_url);
           let previewHtml = '';
+          let actionHtml = '';
           if (row.file_type === 'image' && mediaUrl) {
             previewHtml = `<div class="detail-output-preview"><img src="${mediaUrl}" alt="result preview" /></div>`;
           } else if (row.file_type === 'video' && mediaUrl) {
@@ -654,12 +658,27 @@ function renderAdminDetail(data) {
           const previewLink = mediaUrl
             ? `<a class="detail-link" href="${mediaUrl}" target="_blank" rel="noreferrer">查看结果</a>`
             : '';
+          if (row.file_type !== 'text' && mediaUrl) {
+            actionHtml = `
+              <div class="detail-action-row">
+                <button type="button" class="ghost compact admin-detail-preview-btn" data-index="${index}">预览</button>
+                <a class="ghost compact detail-link-btn" href="${mediaUrl}" download target="_blank" rel="noreferrer">下载</a>
+              </div>
+            `;
+          } else if (row.file_type === 'text') {
+            actionHtml = `
+              <div class="detail-action-row">
+                <button type="button" class="ghost compact admin-detail-preview-btn" data-index="${index}">预览</button>
+              </div>
+            `;
+          }
           return `
             <div class="detail-list-item">
               <p><strong>${escapeHtml(CAPABILITY_LABELS[row.capability] || row.capability)}</strong> · ${escapeHtml(row.model_name || row.model_code || '-')}</p>
               <p>状态：${escapeHtml(row.status)} · 消耗：${escapeHtml(row.cost_points)} · ${formatTime(row.created_at)}</p>
               <p class="detail-prompt">${escapeHtml(row.prompt_text || '')}</p>
               ${previewHtml}
+              ${actionHtml}
               ${previewLink}
             </div>
           `;
@@ -712,6 +731,14 @@ function renderAdminDetail(data) {
       </section>
     </div>
   `;
+
+  els.adminDetailBody.querySelectorAll('.admin-detail-preview-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      const index = Number.parseInt(button.dataset.index, 10);
+      const row = state.ui.adminDetailGenerations[index];
+      if (row) openPreview(row);
+    });
+  });
 }
 
 async function openAdminDetailModal(userId) {
