@@ -535,10 +535,7 @@ button.compact {
 }
 
 .admin-api-card-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: flex-start;
+  display: block;
 }
 
 .admin-api-card-meta {
@@ -547,12 +544,6 @@ button.compact {
   font-size: 13px;
 }
 
-.admin-api-badges {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
 
 .admin-api-meter-grid {
   display: grid;

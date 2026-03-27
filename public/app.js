@@ -1399,10 +1399,6 @@ function renderAdminApiUsage(items) {
           <strong>${escapeHtml(item.model_name)}</strong>
           <p class="admin-api-card-meta">当前周期截止：${formatTime(item.end_time)} ｜ 剩余 ${escapeHtml(formatRemainMs(item.remains_time))}</p>
         </div>
-        <div class="admin-api-badges">
-          <span class="status-badge ${intervalRate >= 1 ? 'failed' : intervalRate >= 0.8 ? 'processing' : 'completed'}">${escapeHtml(formatPercent(intervalRate))}</span>
-          <span class="status-badge">${escapeHtml(formatPercent(weeklyRate))} / 周</span>
-        </div>
       </div>
       <div class="admin-api-meter-grid">
         <div class="usage-meter">

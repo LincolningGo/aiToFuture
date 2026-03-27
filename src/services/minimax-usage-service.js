@@ -21,6 +21,22 @@ function maskApiKey(raw) {
   return `${value.slice(0, 6)}***${value.slice(-4)}`;
 }
 
+function detectModelCategory(modelName) {
+  const value = String(modelName || '').toLowerCase();
+  if (/image|img|i2i|paint|photo/.test(value)) return 'image';
+  if (/video|t2v|s2v|director|hailuo/.test(value)) return 'video';
+  if (/music|lyrics|audio|speech|voice|t2a/.test(value)) return 'audio';
+  return 'text';
+}
+
+function getCategorySortRank(category) {
+  if (category === 'text') return 0;
+  if (category === 'image') return 1;
+  if (category === 'video') return 2;
+  if (category === 'audio') return 3;
+  return 9;
+}
+
 function formatUsageItem(row) {
   const intervalTotal = Math.max(Number(row.current_interval_total_count) || 0, 0);
   const intervalUsed = Math.max(Number(row.current_interval_usage_count) || 0, 0);
@@ -28,9 +44,11 @@ function formatUsageItem(row) {
   const weeklyUsed = Math.max(Number(row.current_weekly_usage_count) || 0, 0);
   const intervalUsageRate = intervalTotal > 0 ? intervalUsed / intervalTotal : 0;
   const weeklyUsageRate = weeklyTotal > 0 ? weeklyUsed / weeklyTotal : 0;
+  const modelName = row.model_name || '-';
 
   return {
-    model_name: row.model_name || '-',
+    model_name: modelName,
+    category: detectModelCategory(modelName),
     start_time: row.start_time || null,
     end_time: row.end_time || null,
     remains_time: Math.max(Number(row.remains_time) || 0, 0),
@@ -108,9 +126,8 @@ async function fetchMinimaxCodingPlanRemains() {
 
   const items = Array.isArray(payload.model_remains) ? payload.model_remains.map(formatUsageItem) : [];
   items.sort((a, b) => {
-    const left = Math.max(a.current_interval_usage_rate, a.current_weekly_usage_rate);
-    const right = Math.max(b.current_interval_usage_rate, b.current_weekly_usage_rate);
-    return right - left || a.model_name.localeCompare(b.model_name);
+    const rankDiff = getCategorySortRank(a.category) - getCategorySortRank(b.category);
+    return rankDiff || a.model_name.localeCompare(b.model_name);
   });
 
   return {
