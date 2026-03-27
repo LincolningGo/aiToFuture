@@ -6,7 +6,7 @@
     <title>ATF Console</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" href="/favicon.svg" />
-    <link rel="stylesheet" href="/styles.css?v=20260326h" />
+    <link rel="stylesheet" href="/styles.css?v=20260327a" />
   </head>
   <body>
     <div class="bg-shape bg-shape-a"></div>
@@ -226,6 +226,7 @@
 	                <div class="workspace-nav admin-subnav">
 	                  <button id="adminUsersTabBtn" class="nav-chip active" type="button">用户管理</button>
 	                  <button id="adminLogsTabBtn" class="nav-chip" type="button">操作日志</button>
+	                  <button id="adminApiUsageTabBtn" class="nav-chip" type="button">API 看板</button>
 	                  <button id="adminSettingsTabBtn" class="nav-chip" type="button">系统设置</button>
 	                </div>
 	              </div>
@@ -318,6 +319,64 @@
 	                    <button type="button" id="adminLogsNextBtn" class="ghost compact">下一页</button>
 	                  </div>
 	                </div>
+	              </section>
+
+	              <section id="adminApiUsageSection" class="hidden">
+	                <div class="section-head admin-section-head">
+	                  <div>
+	                    <h3>API Key 使用看板</h3>
+	                    <p id="adminApiUsageSummary" class="hint compact"></p>
+	                  </div>
+	                  <button type="button" id="adminApiUsageRefreshBtn" class="ghost compact">刷新看板</button>
+	                </div>
+
+	                <div class="admin-stats admin-api-stats">
+	                  <div class="stat-card">
+	                    <span class="stat-label">Provider</span>
+	                    <strong id="adminApiProvider">-</strong>
+	                  </div>
+	                  <div class="stat-card">
+	                    <span class="stat-label">API Key</span>
+	                    <strong id="adminApiKeyMasked">-</strong>
+	                  </div>
+	                  <div class="stat-card">
+	                    <span class="stat-label">模型数</span>
+	                    <strong id="adminApiModelCount">0</strong>
+	                  </div>
+	                  <div class="stat-card">
+	                    <span class="stat-label">临近耗尽</span>
+	                    <strong id="adminApiNearLimit">0</strong>
+	                  </div>
+	                </div>
+
+	                <div class="admin-api-overview-grid">
+	                  <div class="detail-card">
+	                    <div class="section-head">
+	                      <div>
+	                        <h3>当前周期</h3>
+	                        <p id="adminApiIntervalHint" class="hint compact"></p>
+	                      </div>
+	                    </div>
+	                    <div class="usage-meter">
+	                      <div class="progress-bar large"><div id="adminApiIntervalProgress" class="progress-fill" style="width:0%"></div></div>
+	                      <p id="adminApiIntervalText" class="hint compact">0 / 0</p>
+	                    </div>
+	                  </div>
+	                  <div class="detail-card">
+	                    <div class="section-head">
+	                      <div>
+	                        <h3>本周额度</h3>
+	                        <p id="adminApiWeeklyHint" class="hint compact"></p>
+	                      </div>
+	                    </div>
+	                    <div class="usage-meter">
+	                      <div class="progress-bar large"><div id="adminApiWeeklyProgress" class="progress-fill" style="width:0%"></div></div>
+	                      <p id="adminApiWeeklyText" class="hint compact">0 / 0</p>
+	                    </div>
+	                  </div>
+	                </div>
+
+	                <div id="adminApiUsageList" class="admin-api-usage-list"></div>
 	              </section>
 
 	              <section id="adminSettingsSection" class="hidden">
@@ -427,6 +486,6 @@
 	      </div>
 	    </div>
 
-	    <script src="/app.js?v=20260326h"></script>
+	    <script src="/app.js?v=20260327a"></script>
   </body>
 </html>

@@ -509,6 +509,83 @@ button.compact {
   grid-template-columns: minmax(260px, 1.6fr) minmax(180px, 0.8fr) auto;
 }
 
+.admin-api-stats {
+  margin-bottom: 16px;
+}
+
+.admin-api-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.admin-api-usage-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-api-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfefe 100%);
+  display: grid;
+  gap: 12px;
+}
+
+.admin-api-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.admin-api-card-meta {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-api-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-api-meter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.usage-meter {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-api-meter-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.progress-bar.large {
+  height: 10px;
+}
+
+.admin-api-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .admin-log-row {
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -1184,6 +1261,11 @@ button.compact {
     grid-template-columns: 1fr 1fr;
   }
 
+  .admin-api-overview-grid,
+  .admin-api-meter-grid {
+    grid-template-columns: 1fr;
+  }
+
   .admin-user-row {
     grid-template-columns: 1fr;
   }
@@ -1252,6 +1334,8 @@ button.compact {
   .admin-toolbar,
   .admin-stats,
   .admin-log-toolbar,
+  .admin-api-overview-grid,
+  .admin-api-meter-grid,
   .admin-detail-top,
   .admin-detail-grid {
     grid-template-columns: 1fr;
@@ -1304,6 +1388,7 @@ button.compact {
   .workspace-nav,
   .admin-user-head,
   .admin-log-topline,
+  .admin-api-card-head,
   .admin-job-head,
   .section-foot {
     flex-direction: column;

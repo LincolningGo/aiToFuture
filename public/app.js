@@ -90,6 +90,22 @@ const state = {
     actionType: '',
     items: [],
   },
+  adminApiUsage: {
+    provider: '',
+    keyMasked: '',
+    source: '',
+    syncedAt: '',
+    overview: {
+      modelCount: 0,
+      intervalTotal: 0,
+      intervalUsed: 0,
+      weeklyTotal: 0,
+      weeklyUsed: 0,
+      exhaustedModels: 0,
+      nearLimitModels: 0,
+    },
+    items: [],
+  },
   systemSettings: {
     registerEnabled: true,
     registerBonusPoints: 100,
@@ -131,9 +147,11 @@ const els = {
   adminView: document.getElementById('adminView'),
   adminUsersTabBtn: document.getElementById('adminUsersTabBtn'),
   adminLogsTabBtn: document.getElementById('adminLogsTabBtn'),
+  adminApiUsageTabBtn: document.getElementById('adminApiUsageTabBtn'),
   adminSettingsTabBtn: document.getElementById('adminSettingsTabBtn'),
   adminUsersSection: document.getElementById('adminUsersSection'),
   adminLogsSection: document.getElementById('adminLogsSection'),
+  adminApiUsageSection: document.getElementById('adminApiUsageSection'),
   adminSettingsSection: document.getElementById('adminSettingsSection'),
   loginForm: document.getElementById('loginForm'),
   registerForm: document.getElementById('registerForm'),
@@ -191,6 +209,19 @@ const els = {
   adminLogsPrevBtn: document.getElementById('adminLogsPrevBtn'),
   adminLogsNextBtn: document.getElementById('adminLogsNextBtn'),
   adminLogsPageInfo: document.getElementById('adminLogsPageInfo'),
+  adminApiUsageSummary: document.getElementById('adminApiUsageSummary'),
+  adminApiUsageRefreshBtn: document.getElementById('adminApiUsageRefreshBtn'),
+  adminApiProvider: document.getElementById('adminApiProvider'),
+  adminApiKeyMasked: document.getElementById('adminApiKeyMasked'),
+  adminApiModelCount: document.getElementById('adminApiModelCount'),
+  adminApiNearLimit: document.getElementById('adminApiNearLimit'),
+  adminApiIntervalHint: document.getElementById('adminApiIntervalHint'),
+  adminApiIntervalProgress: document.getElementById('adminApiIntervalProgress'),
+  adminApiIntervalText: document.getElementById('adminApiIntervalText'),
+  adminApiWeeklyHint: document.getElementById('adminApiWeeklyHint'),
+  adminApiWeeklyProgress: document.getElementById('adminApiWeeklyProgress'),
+  adminApiWeeklyText: document.getElementById('adminApiWeeklyText'),
+  adminApiUsageList: document.getElementById('adminApiUsageList'),
   adminSettingsRefreshBtn: document.getElementById('adminSettingsRefreshBtn'),
   adminSettingsForm: document.getElementById('adminSettingsForm'),
   registerEnabledInput: document.getElementById('registerEnabledInput'),
@@ -336,6 +367,26 @@ function renderAdminSettingsForm() {
   els.registerBonusPointsInput.value = String(state.systemSettings.registerBonusPoints ?? 0);
   els.adminSettingsHint.textContent = `当前状态：${state.systemSettings.registerEnabled ? '开放注册' : '关闭注册'} ｜ 注册赠送 ${state.systemSettings.registerBonusPoints} 积分`;
   setAdminSettingsMsg('');
+}
+
+function formatRatio(used, total) {
+  return `${used} / ${total}`;
+}
+
+function formatPercent(rate) {
+  const value = Math.max(0, Math.min(Number(rate) || 0, 1));
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatRemainMs(ms) {
+  const safe = Math.max(Number(ms) || 0, 0);
+  const totalSeconds = Math.floor(safe / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (days > 0) return `${days}天 ${hours}小时`;
+  if (hours > 0) return `${hours}小时 ${minutes}分钟`;
+  return `${minutes}分钟`;
 }
 
 function describeAdminAction(row) {
@@ -550,13 +601,16 @@ function renderViewState() {
 function renderAdminSectionState() {
   const showUsers = isSuperAdmin() && state.ui.view === 'admin' && state.ui.adminSection === 'users';
   const showLogs = isSuperAdmin() && state.ui.view === 'admin' && state.ui.adminSection === 'logs';
+  const showApiUsage = isSuperAdmin() && state.ui.view === 'admin' && state.ui.adminSection === 'api_usage';
   const showSettings = isSuperAdmin() && state.ui.view === 'admin' && state.ui.adminSection === 'settings';
 
   els.adminUsersTabBtn.classList.toggle('active', showUsers);
   els.adminLogsTabBtn.classList.toggle('active', showLogs);
+  els.adminApiUsageTabBtn.classList.toggle('active', showApiUsage);
   els.adminSettingsTabBtn.classList.toggle('active', showSettings);
   els.adminUsersSection.classList.toggle('hidden', !showUsers);
   els.adminLogsSection.classList.toggle('hidden', !showLogs);
+  els.adminApiUsageSection.classList.toggle('hidden', !showApiUsage);
   els.adminSettingsSection.classList.toggle('hidden', !showSettings);
   if (!isSuperAdmin() || state.ui.view !== 'admin') {
     els.adminSummary.textContent = '';
@@ -568,6 +622,10 @@ function renderAdminSectionState() {
     els.adminSummary.textContent = state.adminLogs.total > 0
       ? `共 ${state.adminLogs.total} 条日志，当前每页 ${state.adminLogs.limit} 条。`
       : '暂无匹配日志。';
+  } else if (showApiUsage) {
+    els.adminSummary.textContent = state.adminApiUsage.provider
+      ? `Provider：${state.adminApiUsage.provider} ｜ 最近同步：${formatTime(state.adminApiUsage.syncedAt)}`
+      : 'API Key 使用情况待加载。';
   } else if (showSettings) {
     els.adminSummary.textContent = `注册：${state.systemSettings.registerEnabled ? '开放' : '关闭'} ｜ 新用户积分：${state.systemSettings.registerBonusPoints}`;
   }
@@ -1160,6 +1218,23 @@ async function refreshMe(options = {}) {
       actionType: '',
       items: [],
     };
+    state.adminApiUsage = {
+      ...state.adminApiUsage,
+      provider: '',
+      keyMasked: '',
+      source: '',
+      syncedAt: '',
+      items: [],
+      overview: {
+        modelCount: 0,
+        intervalTotal: 0,
+        intervalUsed: 0,
+        weeklyTotal: 0,
+        weeklyUsed: 0,
+        exhaustedModels: 0,
+        nearLimitModels: 0,
+      },
+    };
     state.systemSettings = {
       registerEnabled: state.publicAuthSettings.registerEnabled,
       registerBonusPoints: state.publicAuthSettings.registerBonusPoints,
@@ -1300,6 +1375,60 @@ function syncAdminLogFiltersToInputs() {
   els.adminLogActionFilter.value = state.adminLogs.actionType;
 }
 
+function renderAdminApiUsage(items) {
+  els.adminApiUsageList.innerHTML = '';
+
+  if (!isSuperAdmin()) {
+    els.adminApiUsageList.innerHTML = '<p class="hint">仅超级管理员可访问</p>';
+    return;
+  }
+
+  if (!items.length) {
+    els.adminApiUsageList.innerHTML = '<p class="hint">暂无 API 使用数据</p>';
+    return;
+  }
+
+  items.forEach((item) => {
+    const card = document.createElement('article');
+    card.className = 'admin-api-card';
+    const intervalRate = Math.max(0, Math.min(Number(item.current_interval_usage_rate) || 0, 1));
+    const weeklyRate = Math.max(0, Math.min(Number(item.current_weekly_usage_rate) || 0, 1));
+    card.innerHTML = `
+      <div class="admin-api-card-head">
+        <div>
+          <strong>${escapeHtml(item.model_name)}</strong>
+          <p class="admin-api-card-meta">当前周期截止：${formatTime(item.end_time)} ｜ 剩余 ${escapeHtml(formatRemainMs(item.remains_time))}</p>
+        </div>
+        <div class="admin-api-badges">
+          <span class="status-badge ${intervalRate >= 1 ? 'failed' : intervalRate >= 0.8 ? 'processing' : 'completed'}">${escapeHtml(formatPercent(intervalRate))}</span>
+          <span class="status-badge">${escapeHtml(formatPercent(weeklyRate))} / 周</span>
+        </div>
+      </div>
+      <div class="admin-api-meter-grid">
+        <div class="usage-meter">
+          <div class="admin-api-meter-label">
+            <span>当前周期</span>
+            <strong>${escapeHtml(formatRatio(item.current_interval_usage_count, item.current_interval_total_count))}</strong>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${intervalRate * 100}%"></div></div>
+        </div>
+        <div class="usage-meter">
+          <div class="admin-api-meter-label">
+            <span>本周额度</span>
+            <strong>${escapeHtml(formatRatio(item.current_weekly_usage_count, item.current_weekly_total_count))}</strong>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${weeklyRate * 100}%"></div></div>
+        </div>
+      </div>
+      <div class="admin-api-card-foot">
+        <span>本周截止：${formatTime(item.weekly_end_time)}</span>
+        <span>周剩余 ${escapeHtml(formatRemainMs(item.weekly_remains_time))}</span>
+      </div>
+    `;
+    els.adminApiUsageList.appendChild(card);
+  });
+}
+
 async function refreshAdminUsers(options = {}) {
   if (!isSuperAdmin()) {
     state.adminUsers = {
@@ -1409,6 +1538,80 @@ async function refreshAdminLogs(options = {}) {
 
   renderAdminLogs(rows);
   renderAdminLogsPagination();
+  renderAdminSectionState();
+}
+
+async function refreshAdminApiUsage() {
+  if (!isSuperAdmin()) {
+    state.adminApiUsage = {
+      ...state.adminApiUsage,
+      provider: '',
+      keyMasked: '',
+      source: '',
+      syncedAt: '',
+      items: [],
+      overview: {
+        modelCount: 0,
+        intervalTotal: 0,
+        intervalUsed: 0,
+        weeklyTotal: 0,
+        weeklyUsed: 0,
+        exhaustedModels: 0,
+        nearLimitModels: 0,
+      },
+    };
+    els.adminApiUsageSummary.textContent = '';
+    renderAdminApiUsage([]);
+    renderAdminSectionState();
+    return;
+  }
+
+  const data = await api('/api/admin/api-key-usage');
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const overview = data?.overview || {};
+  state.adminApiUsage = {
+    provider: String(data?.provider || 'minimax'),
+    keyMasked: String(data?.keyMasked || ''),
+    source: String(data?.source || ''),
+    syncedAt: data?.syncedAt || new Date().toISOString(),
+    overview: {
+      modelCount: Number(overview.modelCount || items.length || 0),
+      intervalTotal: Number(overview.intervalTotal || 0),
+      intervalUsed: Number(overview.intervalUsed || 0),
+      weeklyTotal: Number(overview.weeklyTotal || 0),
+      weeklyUsed: Number(overview.weeklyUsed || 0),
+      exhaustedModels: Number(overview.exhaustedModels || 0),
+      nearLimitModels: Number(overview.nearLimitModels || 0),
+    },
+    items,
+  };
+
+  const intervalRate = state.adminApiUsage.overview.intervalTotal > 0
+    ? state.adminApiUsage.overview.intervalUsed / state.adminApiUsage.overview.intervalTotal
+    : 0;
+  const weeklyRate = state.adminApiUsage.overview.weeklyTotal > 0
+    ? state.adminApiUsage.overview.weeklyUsed / state.adminApiUsage.overview.weeklyTotal
+    : 0;
+
+  els.adminApiProvider.textContent = state.adminApiUsage.provider;
+  els.adminApiKeyMasked.textContent = state.adminApiUsage.keyMasked || '-';
+  els.adminApiModelCount.textContent = state.adminApiUsage.overview.modelCount;
+  els.adminApiNearLimit.textContent = `${state.adminApiUsage.overview.nearLimitModels}`;
+  els.adminApiIntervalHint.textContent = `已用 ${formatPercent(intervalRate)} ｜ 耗尽 ${state.adminApiUsage.overview.exhaustedModels} 个模型`;
+  els.adminApiIntervalProgress.style.width = `${Math.max(0, Math.min(intervalRate, 1)) * 100}%`;
+  els.adminApiIntervalText.textContent = formatRatio(
+    state.adminApiUsage.overview.intervalUsed,
+    state.adminApiUsage.overview.intervalTotal,
+  );
+  els.adminApiWeeklyHint.textContent = `已用 ${formatPercent(weeklyRate)} ｜ 数据源 ${state.adminApiUsage.source || '-'}`;
+  els.adminApiWeeklyProgress.style.width = `${Math.max(0, Math.min(weeklyRate, 1)) * 100}%`;
+  els.adminApiWeeklyText.textContent = formatRatio(
+    state.adminApiUsage.overview.weeklyUsed,
+    state.adminApiUsage.overview.weeklyTotal,
+  );
+  els.adminApiUsageSummary.textContent = `最近同步：${formatTime(state.adminApiUsage.syncedAt)} ｜ 共 ${state.adminApiUsage.items.length} 个模型配额。`;
+
+  renderAdminApiUsage(items);
   renderAdminSectionState();
 }
 
@@ -1601,6 +1804,23 @@ async function handleLogout() {
     actionType: '',
     items: [],
   };
+  state.adminApiUsage = {
+    ...state.adminApiUsage,
+    provider: '',
+    keyMasked: '',
+    source: '',
+    syncedAt: '',
+    items: [],
+    overview: {
+      modelCount: 0,
+      intervalTotal: 0,
+      intervalUsed: 0,
+      weeklyTotal: 0,
+      weeklyUsed: 0,
+      exhaustedModels: 0,
+      nearLimitModels: 0,
+    },
+  };
   await refreshRegisterConfig();
   state.systemSettings = {
     registerEnabled: state.publicAuthSettings.registerEnabled,
@@ -1647,6 +1867,8 @@ els.adminNavBtn.addEventListener('click', async () => {
   try {
     if (state.ui.adminSection === 'logs') {
       await refreshAdminLogs();
+    } else if (state.ui.adminSection === 'api_usage') {
+      await refreshAdminApiUsage();
     } else if (state.ui.adminSection === 'settings') {
       await refreshAdminSystemSettings();
     } else {
@@ -1674,6 +1896,17 @@ els.adminLogsTabBtn.addEventListener('click', async () => {
   renderViewState();
   try {
     await refreshAdminLogs();
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminApiUsageTabBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  state.ui.adminSection = 'api_usage';
+  renderViewState();
+  try {
+    await refreshAdminApiUsage();
   } catch (err) {
     setGlobalMsg(err.message);
   }
@@ -1835,6 +2068,15 @@ els.adminLogsRefreshBtn.addEventListener('click', async () => {
   if (!isSuperAdmin()) return;
   try {
     await refreshAdminLogs({ page: 1 });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.adminApiUsageRefreshBtn.addEventListener('click', async () => {
+  if (!isSuperAdmin()) return;
+  try {
+    await refreshAdminApiUsage();
   } catch (err) {
     setGlobalMsg(err.message);
   }

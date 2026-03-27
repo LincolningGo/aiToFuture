@@ -3,6 +3,7 @@ const { pool } = require('../db/mysql');
 const { requireAuth, requireSuperAdmin } = require('../middleware/auth');
 const { AppError } = require('../utils/errors');
 const { getSystemSettings, updateSystemSettings } = require('../services/system-settings');
+const { fetchMinimaxCodingPlanRemains } = require('../services/minimax-usage-service');
 
 const router = express.Router();
 const USER_ROLES = new Set(['user', 'super_admin']);
@@ -229,6 +230,18 @@ router.get('/system-settings', async (_req, res, next) => {
     res.json({
       success: true,
       data: systemSettings,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/api-key-usage', async (_req, res, next) => {
+  try {
+    const data = await fetchMinimaxCodingPlanRemains();
+    res.json({
+      success: true,
+      data,
     });
   } catch (err) {
     next(err);

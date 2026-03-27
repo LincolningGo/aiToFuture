@@ -30,6 +30,7 @@ const config = {
   storageRoot: process.env.STORAGE_ROOT || path.join(process.cwd(), 'storage', 'generated'),
   aiProvider: process.env.AI_PROVIDER || 'minimax_mock',
   minimaxApiBase: process.env.MINIMAX_API_BASE || 'https://api.minimaxi.com',
+  minimaxOpenPlatformBase: process.env.MINIMAX_OPENPLATFORM_BASE || 'https://www.minimaxi.com',
   minimaxApiKey: process.env.MINIMAX_API_KEY || '',
   minimaxImageModel: process.env.MINIMAX_IMAGE_MODEL || 'image-01',
   minimaxVideoModel: process.env.MINIMAX_VIDEO_MODEL || 'T2V-01-Director',
