@@ -577,6 +577,20 @@ function setButtonLoading(button, loadingText, isLoading) {
   button.textContent = isLoading ? loadingText : button.dataset.defaultText;
 }
 
+async function runRefreshAction(button, hintElement, hintText, action) {
+  const previousHint = hintElement ? hintElement.textContent : '';
+  setButtonLoading(button, '刷新中...', true);
+  if (hintElement) hintElement.textContent = hintText;
+  try {
+    await action();
+  } catch (err) {
+    if (hintElement) hintElement.textContent = previousHint;
+    throw err;
+  } finally {
+    setButtonLoading(button, '刷新中...', false);
+  }
+}
+
 function getCostFor(capability) {
   const row = state.costs.find((x) => x.capability === capability);
   if (row) return row.cost_points;
@@ -2052,7 +2066,7 @@ els.ledgerNextBtn.addEventListener('click', async () => {
 els.adminRefreshBtn.addEventListener('click', async () => {
   if (!isSuperAdmin()) return;
   try {
-    await refreshAdminUsers({ page: 1 });
+    await runRefreshAction(els.adminRefreshBtn, els.adminUsersHint, '正在刷新用户列表...', () => refreshAdminUsers({ page: 1 }));
   } catch (err) {
     setGlobalMsg(err.message);
   }
@@ -2061,7 +2075,7 @@ els.adminRefreshBtn.addEventListener('click', async () => {
 els.adminLogsRefreshBtn.addEventListener('click', async () => {
   if (!isSuperAdmin()) return;
   try {
-    await refreshAdminLogs({ page: 1 });
+    await runRefreshAction(els.adminLogsRefreshBtn, els.adminLogsHint, '正在刷新操作日志...', () => refreshAdminLogs({ page: 1 }));
   } catch (err) {
     setGlobalMsg(err.message);
   }
@@ -2069,23 +2083,17 @@ els.adminLogsRefreshBtn.addEventListener('click', async () => {
 
 els.adminApiUsageRefreshBtn.addEventListener('click', async () => {
   if (!isSuperAdmin()) return;
-  const previousSummary = els.adminApiUsageSummary.textContent;
-  setButtonLoading(els.adminApiUsageRefreshBtn, '刷新中...', true);
-  els.adminApiUsageSummary.textContent = '正在刷新 API 配额...';
   try {
-    await refreshAdminApiUsage();
+    await runRefreshAction(els.adminApiUsageRefreshBtn, els.adminApiUsageSummary, '正在刷新 API 配额...', () => refreshAdminApiUsage());
   } catch (err) {
-    els.adminApiUsageSummary.textContent = previousSummary;
     setGlobalMsg(err.message);
-  } finally {
-    setButtonLoading(els.adminApiUsageRefreshBtn, '刷新中...', false);
   }
 });
 
 els.adminSettingsRefreshBtn.addEventListener('click', async () => {
   if (!isSuperAdmin()) return;
   try {
-    await refreshAdminSystemSettings();
+    await runRefreshAction(els.adminSettingsRefreshBtn, els.adminSettingsHint, '正在刷新系统设置...', () => refreshAdminSystemSettings());
   } catch (err) {
     setGlobalMsg(err.message);
   }
