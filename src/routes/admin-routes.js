@@ -456,6 +456,10 @@ router.patch('/users/:userId/status', async (req, res, next) => {
       const beforeValue = Number(user.is_active ? 1 : 0);
       const afterValue = Number(isActive ? 1 : 0);
 
+      if (String(user.role || 'user') === 'super_admin' && afterValue === 0) {
+        throw new AppError('Super admin account cannot be disabled', 400, 'CANNOT_DISABLE_SUPER_ADMIN');
+      }
+
       if (beforeValue !== afterValue) {
         await conn.query('UPDATE users SET is_active = ? WHERE id = ?', [afterValue, targetUserId]);
       }
@@ -534,6 +538,10 @@ router.patch('/users/:userId/role', async (req, res, next) => {
       const beforeRole = String(user.role || 'user');
       const afterRole = role;
       const changed = beforeRole !== afterRole;
+
+      if (beforeRole === 'super_admin' && changed) {
+        throw new AppError('Super admin role cannot be changed directly', 400, 'CANNOT_CHANGE_SUPER_ADMIN_ROLE');
+      }
 
       if (changed) {
         await conn.query('UPDATE users SET role = ? WHERE id = ?', [afterRole, targetUserId]);

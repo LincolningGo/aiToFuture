@@ -337,6 +337,15 @@ function getRoleLabel(role) {
   return role === 'super_admin' ? '超级管理员' : '普通用户';
 }
 
+function canChangeAdminUserRole(user) {
+  return String(user?.role || '') !== 'super_admin';
+}
+
+function canToggleAdminUserStatus(user) {
+  if (String(user?.role || '') !== 'super_admin') return true;
+  return Boolean(user && !user.is_active);
+}
+
 function getAdminActionLabel(actionType) {
   return ADMIN_ACTION_LABELS[actionType] || actionType || '-';
 }
@@ -714,6 +723,11 @@ function closePointsModal() {
 }
 
 function openRoleModal(user) {
+  if (!canChangeAdminUserRole(user)) {
+    setGlobalMsg('超级管理员角色不允许直接修改');
+    return;
+  }
+
   state.ui.roleModalOpen = true;
   state.ui.roleTargetUser = user || null;
   els.roleSelect.value = user?.role || 'user';
@@ -1281,6 +1295,8 @@ function renderAdminUsers(rows) {
     const item = document.createElement('div');
     const roleLabel = getRoleLabel(user.role);
     const statusLabel = user.is_active ? '启用' : '禁用';
+    const canChangeRole = canChangeAdminUserRole(user);
+    const canToggleStatus = canToggleAdminUserStatus(user);
     item.className = 'admin-user-row';
     item.innerHTML = `
       <div class="admin-user-main">
@@ -1303,10 +1319,10 @@ function renderAdminUsers(rows) {
       </div>
       <div class="admin-user-actions">
         <button type="button" class="ghost compact admin-view-user">查看</button>
-        <button type="button" class="ghost compact admin-role-change">改角色</button>
+        ${canChangeRole ? '<button type="button" class="ghost compact admin-role-change">改角色</button>' : ''}
         <button type="button" class="ghost compact admin-points-grant">发积分</button>
         <button type="button" class="ghost compact admin-points-deduct">扣积分</button>
-        <button type="button" class="ghost compact admin-status-toggle">${user.is_active ? '禁用' : '启用'}</button>
+        ${canToggleStatus ? `<button type="button" class="ghost compact admin-status-toggle">${user.is_active ? '禁用' : '启用'}</button>` : ''}
       </div>
     `;
 
@@ -1317,6 +1333,11 @@ function renderAdminUsers(rows) {
     item.querySelector('.admin-points-grant')?.addEventListener('click', () => openPointsModal(user, 'grant'));
     item.querySelector('.admin-points-deduct')?.addEventListener('click', () => openPointsModal(user, 'deduct'));
     item.querySelector('.admin-status-toggle')?.addEventListener('click', async () => {
+      if (!canToggleAdminUserStatus(user)) {
+        setGlobalMsg('超级管理员账号不允许禁用');
+        return;
+      }
+
       const actionLabel = user.is_active ? '禁用' : '启用';
       const confirmed = window.confirm(`确认${actionLabel}用户 ${user.username} 吗？`);
       if (!confirmed) return;
@@ -2307,6 +2328,10 @@ els.roleForm.addEventListener('submit', async (event) => {
 
   const role = els.roleSelect.value;
   const reason = String(els.roleReasonInput.value || '').trim();
+  if (!canChangeAdminUserRole(targetUser)) {
+    setRoleFormMsg('超级管理员角色不允许直接修改');
+    return;
+  }
   if (!['user', 'super_admin'].includes(role)) {
     setRoleFormMsg('请选择正确的角色');
     return;
