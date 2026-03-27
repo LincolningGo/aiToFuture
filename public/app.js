@@ -2069,10 +2069,16 @@ els.adminLogsRefreshBtn.addEventListener('click', async () => {
 
 els.adminApiUsageRefreshBtn.addEventListener('click', async () => {
   if (!isSuperAdmin()) return;
+  const previousSummary = els.adminApiUsageSummary.textContent;
+  setButtonLoading(els.adminApiUsageRefreshBtn, '刷新中...', true);
+  els.adminApiUsageSummary.textContent = '正在刷新 API 配额...';
   try {
     await refreshAdminApiUsage();
   } catch (err) {
+    els.adminApiUsageSummary.textContent = previousSummary;
     setGlobalMsg(err.message);
+  } finally {
+    setButtonLoading(els.adminApiUsageRefreshBtn, '刷新中...', false);
   }
 });
 
