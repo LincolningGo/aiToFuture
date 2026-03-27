@@ -370,7 +370,7 @@ function renderAdminSettingsForm() {
 }
 
 function formatRatio(used, total) {
-  return `${used} / ${total}`;
+  return `已用 ${used} / 总量 ${total}`;
 }
 
 function formatPercent(rate) {
