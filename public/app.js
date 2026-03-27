@@ -215,10 +215,8 @@ const els = {
   adminApiKeyMasked: document.getElementById('adminApiKeyMasked'),
   adminApiModelCount: document.getElementById('adminApiModelCount'),
   adminApiNearLimit: document.getElementById('adminApiNearLimit'),
-  adminApiIntervalHint: document.getElementById('adminApiIntervalHint'),
   adminApiIntervalProgress: document.getElementById('adminApiIntervalProgress'),
   adminApiIntervalText: document.getElementById('adminApiIntervalText'),
-  adminApiWeeklyHint: document.getElementById('adminApiWeeklyHint'),
   adminApiWeeklyProgress: document.getElementById('adminApiWeeklyProgress'),
   adminApiWeeklyText: document.getElementById('adminApiWeeklyText'),
   adminApiUsageList: document.getElementById('adminApiUsageList'),
@@ -370,7 +368,9 @@ function renderAdminSettingsForm() {
 }
 
 function formatRatio(used, total) {
-  return `已用 ${used} / 总量 ${total}`;
+  const totalCount = Math.max(Number(total) || 0, 0);
+  const remaining = Math.max(totalCount - (Number(used) || 0), 0);
+  return `${remaining}/${totalCount}`;
 }
 
 function formatPercent(rate) {
@@ -1597,13 +1597,11 @@ async function refreshAdminApiUsage() {
   els.adminApiKeyMasked.textContent = state.adminApiUsage.keyMasked || '-';
   els.adminApiModelCount.textContent = state.adminApiUsage.overview.modelCount;
   els.adminApiNearLimit.textContent = `${state.adminApiUsage.overview.nearLimitModels}`;
-  els.adminApiIntervalHint.textContent = `已用 ${formatPercent(intervalRate)} ｜ 耗尽 ${state.adminApiUsage.overview.exhaustedModels} 个模型`;
   els.adminApiIntervalProgress.style.width = `${Math.max(0, Math.min(intervalRate, 1)) * 100}%`;
   els.adminApiIntervalText.textContent = formatRatio(
     state.adminApiUsage.overview.intervalUsed,
     state.adminApiUsage.overview.intervalTotal,
   );
-  els.adminApiWeeklyHint.textContent = `已用 ${formatPercent(weeklyRate)} ｜ 数据源 ${state.adminApiUsage.source || '-'}`;
   els.adminApiWeeklyProgress.style.width = `${Math.max(0, Math.min(weeklyRate, 1)) * 100}%`;
   els.adminApiWeeklyText.textContent = formatRatio(
     state.adminApiUsage.overview.weeklyUsed,
