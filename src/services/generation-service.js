@@ -415,7 +415,112 @@ async function listJobs(userId, options = {}) {
   };
 }
 
+async function recoverInFlightJobsOnStartup(options = {}) {
+  const limit = Math.min(Math.max(Number(options.limit) || 500, 1), 5000);
+
+  const [rows] = await pool.query(
+    `SELECT id, job_uuid, user_id, cost_points, status
+     FROM generation_jobs
+     WHERE status IN ('queued', 'processing')
+     ORDER BY created_at ASC
+     LIMIT ?`,
+    [limit],
+  );
+
+  if (!rows.length) {
+    return { scanned: 0, completed: 0, failed: 0, refunded: 0 };
+  }
+
+  let completed = 0;
+  let failed = 0;
+  let refunded = 0;
+
+  for (const row of rows) {
+    const jobId = Number(row.id);
+    const jobUuid = String(row.job_uuid);
+    const userId = Number(row.user_id);
+    const costPoints = Math.max(Number(row.cost_points) || 0, 0);
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      const [jobRows] = await conn.query(
+        `SELECT id, user_id, cost_points, status
+         FROM generation_jobs
+         WHERE id = ?
+         LIMIT 1
+         FOR UPDATE`,
+        [jobId],
+      );
+
+      if (jobRows.length === 0) {
+        await conn.rollback();
+        continue;
+      }
+
+      const job = jobRows[0];
+      const status = String(job.status || '');
+      if (!['queued', 'processing'].includes(status)) {
+        await conn.commit();
+        continue;
+      }
+
+      const [outputRows] = await conn.query('SELECT id FROM generation_outputs WHERE job_id = ? LIMIT 1', [jobId]);
+      if (outputRows.length > 0) {
+        await conn.query('UPDATE generation_jobs SET status = ?, error_message = NULL WHERE id = ?', ['completed', jobId]);
+        await conn.commit();
+        completed += 1;
+        continue;
+      }
+
+      const [refundRows] = await conn.query(
+        `SELECT id
+         FROM points_ledger
+         WHERE user_id = ? AND reason = 'GENERATION_REFUND' AND reference_id = ?
+         LIMIT 1`,
+        [userId, jobUuid],
+      );
+
+      if (refundRows.length === 0 && costPoints > 0) {
+        const [userRows] = await conn.query('SELECT points FROM users WHERE id = ? FOR UPDATE', [userId]);
+        if (userRows.length > 0) {
+          const balanceAfter = Number(userRows[0].points || 0) + costPoints;
+          await conn.query('UPDATE users SET points = ? WHERE id = ?', [balanceAfter, userId]);
+          await conn.query(
+            `INSERT INTO points_ledger
+             (user_id, change_amount, balance_after, reason, reference_type, reference_id)
+             VALUES (?, ?, ?, 'GENERATION_REFUND', 'generation_job', ?)`,
+            [userId, costPoints, balanceAfter, jobUuid],
+          );
+          refunded += 1;
+        }
+      }
+
+      await conn.query(
+        'UPDATE generation_jobs SET status = ?, error_message = ? WHERE id = ?',
+        ['failed', 'Service restarted, job cancelled', jobId],
+      );
+      await conn.commit();
+      failed += 1;
+    } catch (err) {
+      await conn.rollback();
+      console.error('[BOOT_RECOVERY_ERROR]', { jobUuid }, err);
+    } finally {
+      conn.release();
+    }
+  }
+
+  return {
+    scanned: rows.length,
+    completed,
+    failed,
+    refunded,
+  };
+}
+
 module.exports = {
   submitGeneration,
   listJobs,
+  recoverInFlightJobsOnStartup,
 };
