@@ -351,7 +351,55 @@ async function listJobs(userId, options = {}) {
   const safePage = Math.max(Number(options.page) || 1, 1);
   const offset = (safePage - 1) * safeLimit;
 
-  const [[totalRow]] = await pool.query('SELECT COUNT(*) AS total FROM generation_jobs WHERE user_id = ?', [userId]);
+  const supportedCapabilities = new Set([
+    'text_to_image',
+    'image_to_image',
+    'text_to_video',
+    'text_to_audio',
+    'lyrics_generation',
+    'music_generation',
+  ]);
+  const supportedStatuses = new Set(['queued', 'processing', 'completed', 'failed']);
+  const query = typeof options.query === 'string' ? options.query.trim() : '';
+  const capability = typeof options.capability === 'string' ? options.capability.trim() : '';
+  const status = typeof options.status === 'string' ? options.status.trim() : '';
+  const favoriteOnly = options.favoriteOnly === true;
+
+  const whereParts = ['j.user_id = ?'];
+  const params = [userId];
+
+  if (capability) {
+    if (!supportedCapabilities.has(capability)) {
+      throw new AppError('Invalid capability filter', 400, 'INVALID_CAPABILITY_FILTER');
+    }
+    whereParts.push('j.capability = ?');
+    params.push(capability);
+  }
+  if (status) {
+    if (!supportedStatuses.has(status)) {
+      throw new AppError('Invalid status filter', 400, 'INVALID_STATUS_FILTER');
+    }
+    whereParts.push('j.status = ?');
+    params.push(status);
+  }
+  if (query) {
+    const likeValue = `%${query}%`;
+    whereParts.push('(j.prompt_text LIKE ? OR j.model_name LIKE ? OR j.model_code LIKE ? OR j.job_uuid LIKE ?)');
+    params.push(likeValue, likeValue, likeValue, likeValue);
+  }
+  if (favoriteOnly) {
+    whereParts.push('f.job_uuid IS NOT NULL');
+  }
+
+  const whereSql = `WHERE ${whereParts.join(' AND ')}`;
+
+  const [[totalRow]] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM generation_jobs j
+     LEFT JOIN favorites f ON f.user_id = j.user_id AND f.job_uuid = j.job_uuid
+     ${whereSql}`,
+    params,
+  );
   const [[runningRow]] = await pool.query(
     `SELECT COUNT(*) AS total
      FROM generation_jobs
@@ -362,13 +410,20 @@ async function listJobs(userId, options = {}) {
   const [rows] = await pool.query(
     `SELECT j.job_uuid, j.capability, j.provider, j.model_code, j.model_name,
             j.status, j.cost_points, j.prompt_text, j.error_message, j.created_at,
-            o.file_type, o.public_url, o.metadata_json AS output_metadata
+            o.file_type, o.public_url, o.metadata_json AS output_metadata,
+            IF(f.job_uuid IS NULL, 0, 1) AS is_favorite
      FROM generation_jobs j
-     LEFT JOIN generation_outputs o ON o.job_id = j.id
-     WHERE j.user_id = ?
+     LEFT JOIN (
+       SELECT job_id, MAX(id) AS max_id
+       FROM generation_outputs
+       GROUP BY job_id
+     ) mo ON mo.job_id = j.id
+     LEFT JOIN generation_outputs o ON o.id = mo.max_id
+     LEFT JOIN favorites f ON f.user_id = j.user_id AND f.job_uuid = j.job_uuid
+     ${whereSql}
      ORDER BY j.created_at DESC
      LIMIT ? OFFSET ?`,
-    [userId, safeLimit, offset],
+    [...params, safeLimit, offset],
   );
 
   const total = Number(totalRow?.total || 0);
@@ -403,6 +458,7 @@ async function listJobs(userId, options = {}) {
         file_type: row.file_type,
         public_url: row.public_url,
         output_preview_text: outputPreviewText,
+        is_favorite: Boolean(row.is_favorite),
       };
     }),
     pagination: {

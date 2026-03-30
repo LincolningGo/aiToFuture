@@ -674,6 +674,14 @@ button.compact {
   min-height: 180px;
 }
 
+.history-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(2, minmax(120px, 0.8fr)) auto auto auto;
+  gap: 10px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
 .history-item {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -695,9 +703,16 @@ button.compact {
 .job-topline {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
   margin-bottom: 6px;
+}
+
+.job-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .job-meta,
@@ -746,6 +761,31 @@ button.compact {
 .status-badge.failed {
   background: #fff0eb;
   color: #c15714;
+}
+
+.fav-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  background: #fff;
+  color: #9eb0b6;
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fav-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.fav-btn.active {
+  color: #f0ad2c;
+  border-color: rgba(240, 173, 44, 0.35);
+  background: rgba(240, 173, 44, 0.08);
 }
 
 .job-preview {
@@ -1240,6 +1280,10 @@ button.compact {
     grid-template-columns: 1fr;
   }
 
+  .history-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .admin-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1325,6 +1369,7 @@ button.compact {
   .admin-toolbar,
   .admin-stats,
   .admin-log-toolbar,
+  .history-toolbar,
   .admin-api-overview-grid,
   .admin-api-meter-grid,
   .admin-detail-top,

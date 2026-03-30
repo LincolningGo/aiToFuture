@@ -12,6 +12,7 @@ const userRoutes = require('./routes/user-routes');
 const adminRoutes = require('./routes/admin-routes');
 const modelRoutes = require('./routes/model-routes');
 const generationRoutes = require('./routes/generation-routes');
+const libraryRoutes = require('./routes/library-routes');
 const mediaRoutes = require('./routes/media-routes');
 
 const app = express();
@@ -91,6 +92,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/models', modelRoutes);
 app.use('/api/generation', generationRoutes);
+app.use('/api/library', libraryRoutes);
 
 app.use('/generated', mediaRoutes);
 app.use(

@@ -58,6 +58,10 @@ const state = {
     total: 0,
     totalPages: 1,
     hasRunningJobs: false,
+    query: '',
+    capability: '',
+    status: '',
+    favoriteOnly: false,
   },
   ledger: {
     page: 1,
@@ -177,6 +181,12 @@ const els = {
   costList: document.getElementById('costList'),
   historyList: document.getElementById('historyList'),
   historySummary: document.getElementById('historySummary'),
+  historySearchInput: document.getElementById('historySearchInput'),
+  historyCapabilityFilter: document.getElementById('historyCapabilityFilter'),
+  historyStatusFilter: document.getElementById('historyStatusFilter'),
+  historyFavoriteOnlyBtn: document.getElementById('historyFavoriteOnlyBtn'),
+  historySearchBtn: document.getElementById('historySearchBtn'),
+  historyResetBtn: document.getElementById('historyResetBtn'),
   historyPrevBtn: document.getElementById('historyPrevBtn'),
   historyNextBtn: document.getElementById('historyNextBtn'),
   historyPageInfo: document.getElementById('historyPageInfo'),
@@ -678,6 +688,14 @@ function renderHistoryPagination() {
   els.historyPageInfo.textContent = `第 ${page} / ${totalPages} 页`;
   els.historyPrevBtn.disabled = page <= 1 || state.user === null;
   els.historyNextBtn.disabled = page >= totalPages || state.user === null || total === 0;
+}
+
+function syncHistoryFiltersToInputs() {
+  if (!els.historySearchInput) return;
+  els.historySearchInput.value = state.history.query || '';
+  els.historyCapabilityFilter.value = state.history.capability || '';
+  els.historyStatusFilter.value = state.history.status || '';
+  els.historyFavoriteOnlyBtn.classList.toggle('active', Boolean(state.history.favoriteOnly));
 }
 
 function renderLedgerPagination() {
@@ -1696,13 +1714,21 @@ function renderHistoryRows(rows) {
     const div = document.createElement('div');
     const status = String(row.status || '').toLowerCase();
     const errorText = row.error_message ? `<p class="job-error">错误：${escapeHtml(row.error_message)}</p>` : '';
+    const favoriteActive = row.is_favorite ? 'active' : '';
 
     div.className = 'history-item job';
     div.innerHTML = `
       <div class="job-main">
         <div class="job-topline">
           <strong>${CAPABILITY_LABELS[row.capability] || escapeHtml(row.capability)}</strong>
-          <span class="status-badge ${status}">${escapeHtml(row.status)}</span>
+          <div class="job-top-actions">
+            <button type="button" class="fav-btn ${favoriteActive}" aria-label="收藏" title="收藏">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 17.3l-5.8 3.4 1.6-6.6L2.5 9.2l6.7-.6L12 2.4l2.8 6.2 6.7.6-5.3 4.9 1.6 6.6z" />
+              </svg>
+            </button>
+            <span class="status-badge ${status}">${escapeHtml(row.status)}</span>
+          </div>
         </div>
         <p class="job-meta">模型：${escapeHtml(row.model_name || row.model_code || '-')} ｜ 消耗：${escapeHtml(row.cost_points)}</p>
         <p class="job-prompt">${escapeHtml(row.prompt_text || '')}</p>
@@ -1711,6 +1737,32 @@ function renderHistoryRows(rows) {
       </div>
       ${renderJobPreview(row)}
     `;
+
+    const favBtn = div.querySelector('.fav-btn');
+    if (favBtn) {
+      favBtn.addEventListener('click', async () => {
+        if (!row.job_uuid) return;
+        favBtn.disabled = true;
+        try {
+          const nextValue = !Boolean(row.is_favorite);
+          await api(`/api/library/jobs/${encodeURIComponent(row.job_uuid)}/favorite`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ favorite: nextValue }),
+          });
+          row.is_favorite = nextValue;
+          favBtn.classList.toggle('active', nextValue);
+
+          if (state.history.favoriteOnly && nextValue === false) {
+            await refreshHistory({ page: 1 });
+          }
+        } catch (err) {
+          setGlobalMsg(err.message);
+        } finally {
+          favBtn.disabled = false;
+        }
+      });
+    }
 
     const previewBtn = div.querySelector('.preview-btn');
     if (previewBtn) {
@@ -1723,6 +1775,13 @@ function renderHistoryRows(rows) {
 
 async function refreshHistory(options = {}) {
   const targetPage = Math.max(Number(options.page || state.history.page || 1), 1);
+  const silent = Boolean(options.silent);
+
+  if (typeof options.query === 'string') state.history.query = options.query.trim();
+  if (typeof options.capability === 'string') state.history.capability = options.capability.trim();
+  if (typeof options.status === 'string') state.history.status = options.status.trim();
+  if (options.favoriteOnly !== undefined) state.history.favoriteOnly = Boolean(options.favoriteOnly);
+  if (!silent) syncHistoryFiltersToInputs();
 
   if (state.user === null) {
     stopJobPolling();
@@ -1733,7 +1792,16 @@ async function refreshHistory(options = {}) {
     return;
   }
 
-  const data = await api(`/api/generation/history?limit=${state.history.limit}&page=${targetPage}`);
+  const queryParams = new URLSearchParams({
+    limit: String(state.history.limit),
+    page: String(targetPage),
+  });
+  if (state.history.query) queryParams.set('q', state.history.query);
+  if (state.history.capability) queryParams.set('capability', state.history.capability);
+  if (state.history.status) queryParams.set('status', state.history.status);
+  if (state.history.favoriteOnly) queryParams.set('favorite', '1');
+
+  const data = await api(`/api/generation/history?${queryParams.toString()}`);
   const rows = Array.isArray(data?.items) ? data.items : [];
   const pagination = data?.pagination || {};
 
@@ -1858,7 +1926,17 @@ async function handleLogout() {
   state.ui.authOpen = false;
   state.ui.view = 'console';
   state.ui.adminSection = 'users';
-  state.history = { ...state.history, page: 1, total: 0, totalPages: 1, hasRunningJobs: false };
+  state.history = {
+    ...state.history,
+    page: 1,
+    total: 0,
+    totalPages: 1,
+    hasRunningJobs: false,
+    query: '',
+    capability: '',
+    status: '',
+    favoriteOnly: false,
+  };
   state.ledger = { ...state.ledger, page: 1, total: 0, totalPages: 1 };
   renderAuthState();
   renderAdminSettingsForm();
@@ -2061,6 +2139,78 @@ els.refreshModelsBtn.addEventListener('click', async () => {
   const ok = await refreshModels(previousModelCode);
   if (ok) {
     setGenerateMsg('模型列表已刷新。');
+  }
+});
+
+els.historySearchBtn?.addEventListener('click', async () => {
+  if (state.user === null) {
+    requireLogin('请先登录');
+    return;
+  }
+  try {
+    await refreshHistory({
+      page: 1,
+      query: els.historySearchInput.value,
+      capability: els.historyCapabilityFilter.value,
+      status: els.historyStatusFilter.value,
+    });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.historyResetBtn?.addEventListener('click', async () => {
+  if (state.user === null) {
+    requireLogin('请先登录');
+    return;
+  }
+  try {
+    await refreshHistory({
+      page: 1,
+      query: '',
+      capability: '',
+      status: '',
+      favoriteOnly: false,
+    });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.historyFavoriteOnlyBtn?.addEventListener('click', async () => {
+  if (state.user === null) {
+    requireLogin('请先登录');
+    return;
+  }
+  try {
+    await refreshHistory({
+      page: 1,
+      favoriteOnly: !state.history.favoriteOnly,
+      query: els.historySearchInput.value,
+      capability: els.historyCapabilityFilter.value,
+      status: els.historyStatusFilter.value,
+    });
+  } catch (err) {
+    setGlobalMsg(err.message);
+  }
+});
+
+els.historySearchInput?.addEventListener('keydown', async (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  if (state.user === null) {
+    requireLogin('请先登录');
+    return;
+  }
+  try {
+    await refreshHistory({
+      page: 1,
+      query: els.historySearchInput.value,
+      capability: els.historyCapabilityFilter.value,
+      status: els.historyStatusFilter.value,
+    });
+  } catch (err) {
+    setGlobalMsg(err.message);
   }
 });
 

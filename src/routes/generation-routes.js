@@ -86,6 +86,10 @@ router.get('/history', requireAuth, async (req, res, next) => {
     const result = await listJobs(req.auth.userId, {
       limit: req.query.limit,
       page: req.query.page,
+      query: req.query.q,
+      capability: req.query.capability,
+      status: req.query.status,
+      favoriteOnly: req.query.favorite === '1' || req.query.favorite === 'true',
     });
     res.json({ success: true, data: result });
   } catch (err) {
