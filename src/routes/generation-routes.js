@@ -83,6 +83,10 @@ router.post('/submit-with-file', requireAuth, generationRateLimit, upload.single
 
 router.get('/history', requireAuth, async (req, res, next) => {
   try {
+    const tagIds = String(req.query.tagIds || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
     const result = await listJobs(req.auth.userId, {
       limit: req.query.limit,
       page: req.query.page,
@@ -90,6 +94,7 @@ router.get('/history', requireAuth, async (req, res, next) => {
       capability: req.query.capability,
       status: req.query.status,
       favoriteOnly: req.query.favorite === '1' || req.query.favorite === 'true',
+      tagIds,
     });
     res.json({ success: true, data: result });
   } catch (err) {

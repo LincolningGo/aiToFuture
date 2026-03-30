@@ -364,6 +364,9 @@ async function listJobs(userId, options = {}) {
   const capability = typeof options.capability === 'string' ? options.capability.trim() : '';
   const status = typeof options.status === 'string' ? options.status.trim() : '';
   const favoriteOnly = options.favoriteOnly === true;
+  const tagIds = Array.isArray(options.tagIds)
+    ? [...new Set(options.tagIds.map((item) => Number.parseInt(item, 10)).filter((item) => Number.isInteger(item) && item > 0))]
+    : [];
 
   const whereParts = ['j.user_id = ?'];
   const params = [userId];
@@ -389,6 +392,19 @@ async function listJobs(userId, options = {}) {
   }
   if (favoriteOnly) {
     whereParts.push('f.job_uuid IS NOT NULL');
+  }
+  if (tagIds.length > 0) {
+    whereParts.push(
+      `EXISTS (
+        SELECT 1
+        FROM job_tags jt_filter
+        JOIN tags t_filter ON t_filter.id = jt_filter.tag_id
+        WHERE jt_filter.job_uuid = j.job_uuid
+          AND t_filter.user_id = ?
+          AND jt_filter.tag_id IN (${tagIds.map(() => '?').join(', ')})
+      )`,
+    );
+    params.push(userId, ...tagIds);
   }
 
   const whereSql = `WHERE ${whereParts.join(' AND ')}`;
@@ -426,6 +442,29 @@ async function listJobs(userId, options = {}) {
     [...params, safeLimit, offset],
   );
 
+  const jobUuids = rows.map((row) => String(row.job_uuid || '')).filter(Boolean);
+  const tagsByJobUuid = new Map();
+  if (jobUuids.length > 0) {
+    const [tagRows] = await pool.query(
+      `SELECT jt.job_uuid, t.id, t.name, t.color
+       FROM job_tags jt
+       JOIN tags t ON t.id = jt.tag_id
+       WHERE t.user_id = ? AND jt.job_uuid IN (${jobUuids.map(() => '?').join(', ')})
+       ORDER BY t.created_at DESC, t.id DESC`,
+      [userId, ...jobUuids],
+    );
+
+    tagRows.forEach((row) => {
+      const jobUuid = String(row.job_uuid || '');
+      if (!tagsByJobUuid.has(jobUuid)) tagsByJobUuid.set(jobUuid, []);
+      tagsByJobUuid.get(jobUuid).push({
+        id: row.id,
+        name: row.name,
+        color: row.color,
+      });
+    });
+  }
+
   const total = Number(totalRow?.total || 0);
   const totalPages = Math.max(1, Math.ceil(total / safeLimit));
 
@@ -459,6 +498,7 @@ async function listJobs(userId, options = {}) {
         public_url: row.public_url,
         output_preview_text: outputPreviewText,
         is_favorite: Boolean(row.is_favorite),
+        tags: tagsByJobUuid.get(String(row.job_uuid || '')) || [],
       };
     }),
     pagination: {

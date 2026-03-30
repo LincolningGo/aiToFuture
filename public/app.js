@@ -62,6 +62,10 @@ const state = {
     capability: '',
     status: '',
     favoriteOnly: false,
+    tagIds: [],
+  },
+  tags: {
+    items: [],
   },
   ledger: {
     page: 1,
@@ -132,6 +136,9 @@ const state = {
     adminDetailOpen: false,
     adminDetailUserId: null,
     adminDetailGenerations: [],
+    tagModalOpen: false,
+    tagTargetJob: null,
+    tagSelectedIds: [],
   },
 };
 
@@ -187,6 +194,7 @@ const els = {
   historyFavoriteOnlyBtn: document.getElementById('historyFavoriteOnlyBtn'),
   historySearchBtn: document.getElementById('historySearchBtn'),
   historyResetBtn: document.getElementById('historyResetBtn'),
+  historyTagFilterList: document.getElementById('historyTagFilterList'),
   historyPrevBtn: document.getElementById('historyPrevBtn'),
   historyNextBtn: document.getElementById('historyNextBtn'),
   historyPageInfo: document.getElementById('historyPageInfo'),
@@ -268,6 +276,17 @@ const els = {
   roleReasonInput: document.getElementById('roleReasonInput'),
   roleFormMsg: document.getElementById('roleFormMsg'),
   roleSubmitBtn: document.getElementById('roleSubmitBtn'),
+  tagModal: document.getElementById('tagModal'),
+  tagBackdrop: document.getElementById('tagBackdrop'),
+  tagCloseBtn: document.getElementById('tagCloseBtn'),
+  tagModalTitle: document.getElementById('tagModalTitle'),
+  tagTargetText: document.getElementById('tagTargetText'),
+  tagForm: document.getElementById('tagForm'),
+  tagOptionList: document.getElementById('tagOptionList'),
+  tagCreateInput: document.getElementById('tagCreateInput'),
+  tagCreateBtn: document.getElementById('tagCreateBtn'),
+  tagFormMsg: document.getElementById('tagFormMsg'),
+  tagSubmitBtn: document.getElementById('tagSubmitBtn'),
 };
 
 function setGlobalMsg(msg) {
@@ -334,6 +353,13 @@ function setRoleFormMsg(msg, type = 'error') {
   els.roleFormMsg.textContent = normalized;
   els.roleFormMsg.classList.toggle('hidden', normalized.length === 0);
   els.roleFormMsg.dataset.type = normalized.length === 0 ? '' : type;
+}
+
+function setTagFormMsg(msg, type = 'error') {
+  const normalized = String(msg || '').trim();
+  els.tagFormMsg.textContent = normalized;
+  els.tagFormMsg.classList.toggle('hidden', normalized.length === 0);
+  els.tagFormMsg.dataset.type = normalized.length === 0 ? '' : type;
 }
 
 function setAdminSettingsMsg(msg, type = 'error') {
@@ -696,6 +722,47 @@ function syncHistoryFiltersToInputs() {
   els.historyCapabilityFilter.value = state.history.capability || '';
   els.historyStatusFilter.value = state.history.status || '';
   els.historyFavoriteOnlyBtn.classList.toggle('active', Boolean(state.history.favoriteOnly));
+  renderHistoryTagFilters();
+}
+
+function renderHistoryTagFilters() {
+  if (!els.historyTagFilterList) return;
+  els.historyTagFilterList.innerHTML = '';
+
+  const tags = Array.isArray(state.tags.items) ? state.tags.items : [];
+  const activeIds = new Set(state.history.tagIds || []);
+  if (!tags.length) {
+    els.historyTagFilterList.innerHTML = '<span class="hint compact">暂无标签</span>';
+    return;
+  }
+
+  tags.forEach((tag) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `tag-chip ${activeIds.has(tag.id) ? 'active' : ''}`;
+    button.textContent = `${tag.name}${Number(tag.job_total || 0) > 0 ? ` · ${tag.job_total}` : ''}`;
+    button.addEventListener('click', async () => {
+      if (state.user === null) {
+        requireLogin('请先登录');
+        return;
+      }
+      const nextIds = activeIds.has(tag.id)
+        ? state.history.tagIds.filter((id) => id !== tag.id)
+        : [...state.history.tagIds, tag.id];
+      try {
+        await refreshHistory({
+          page: 1,
+          tagIds: nextIds,
+          query: els.historySearchInput.value,
+          capability: els.historyCapabilityFilter.value,
+          status: els.historyStatusFilter.value,
+        });
+      } catch (err) {
+        setGlobalMsg(err.message);
+      }
+    });
+    els.historyTagFilterList.appendChild(button);
+  });
 }
 
 function renderLedgerPagination() {
@@ -764,6 +831,75 @@ function closeRoleModal() {
   els.roleReasonInput.value = '';
   setRoleFormMsg('');
   els.roleModal.classList.add('hidden');
+}
+
+function renderTagModalOptions() {
+  els.tagOptionList.innerHTML = '';
+  const tags = Array.isArray(state.tags.items) ? state.tags.items : [];
+  const selectedIds = new Set(state.ui.tagSelectedIds || []);
+
+  if (!tags.length) {
+    els.tagOptionList.innerHTML = '<p class="hint compact">暂无标签，请先新建。</p>';
+    return;
+  }
+
+  tags.forEach((tag) => {
+    const row = document.createElement('label');
+    row.className = 'tag-option-row';
+    row.innerHTML = `
+      <span class="checkbox-row">
+        <input type="checkbox" value="${escapeHtml(tag.id)}" ${selectedIds.has(tag.id) ? 'checked' : ''} />
+        <span>${escapeHtml(tag.name)}</span>
+      </span>
+      <button type="button" class="ghost compact tag-delete-btn">删除</button>
+    `;
+
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    checkbox?.addEventListener('change', () => {
+      const next = new Set(state.ui.tagSelectedIds || []);
+      if (checkbox.checked) next.add(tag.id);
+      else next.delete(tag.id);
+      state.ui.tagSelectedIds = [...next];
+    });
+
+    row.querySelector('.tag-delete-btn')?.addEventListener('click', async () => {
+      const confirmed = window.confirm(`确认删除标签「${tag.name}」吗？`);
+      if (!confirmed) return;
+      try {
+        await api(`/api/library/tags/${tag.id}`, { method: 'DELETE' });
+        state.ui.tagSelectedIds = (state.ui.tagSelectedIds || []).filter((id) => id !== tag.id);
+        await refreshLibraryTags();
+        await refreshHistory({ page: state.history.page, tagIds: state.history.tagIds });
+        setTagFormMsg(`已删除标签 ${tag.name}`, 'success');
+      } catch (err) {
+        setTagFormMsg(err.message);
+      }
+    });
+
+    els.tagOptionList.appendChild(row);
+  });
+}
+
+function openTagModal(job) {
+  state.ui.tagModalOpen = true;
+  state.ui.tagTargetJob = job || null;
+  state.ui.tagSelectedIds = Array.isArray(job?.tags) ? job.tags.map((tag) => Number(tag.id)).filter(Boolean) : [];
+  els.tagTargetText.textContent = job
+    ? `任务 ${job.job_uuid} · ${CAPABILITY_LABELS[job.capability] || job.capability}`
+    : '';
+  els.tagCreateInput.value = '';
+  setTagFormMsg('');
+  renderTagModalOptions();
+  els.tagModal.classList.remove('hidden');
+}
+
+function closeTagModal() {
+  state.ui.tagModalOpen = false;
+  state.ui.tagTargetJob = null;
+  state.ui.tagSelectedIds = [];
+  els.tagCreateInput.value = '';
+  setTagFormMsg('');
+  els.tagModal.classList.add('hidden');
 }
 
 function closeAdminDetailModal() {
@@ -1151,6 +1287,24 @@ async function refreshModels(preferredModelCode) {
   }
 }
 
+async function refreshLibraryTags() {
+  if (state.user === null) {
+    state.tags.items = [];
+    state.history.tagIds = [];
+    renderHistoryTagFilters();
+    if (state.ui.tagModalOpen) renderTagModalOptions();
+    return;
+  }
+
+  const rows = await api('/api/library/tags');
+  state.tags.items = Array.isArray(rows) ? rows : [];
+  const validTagIds = new Set(state.tags.items.map((tag) => Number(tag.id)));
+  state.history.tagIds = (state.history.tagIds || []).filter((id) => validTagIds.has(Number(id)));
+  state.ui.tagSelectedIds = (state.ui.tagSelectedIds || []).filter((id) => validTagIds.has(Number(id)));
+  renderHistoryTagFilters();
+  if (state.ui.tagModalOpen) renderTagModalOptions();
+}
+
 async function refreshUserSnapshot() {
   const data = await api('/api/user/me');
   state.user = data.user;
@@ -1229,7 +1383,7 @@ async function refreshMe(options = {}) {
     renderAuthState();
     state.history.page = 1;
     state.ledger.page = 1;
-    const tasks = [refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels(), refreshRegisterConfig()];
+    const tasks = [refreshLibraryTags(), refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels(), refreshRegisterConfig()];
     if (isSuperAdmin()) {
       tasks.push(refreshAdminUsers({ page: 1 }));
       tasks.push(refreshAdminSystemSettings());
@@ -1243,9 +1397,11 @@ async function refreshMe(options = {}) {
     state.costs = [];
     state.models = [];
     state.modelsByCapability = {};
+    state.tags.items = [];
     closeAdminDetailModal();
     closePointsModal();
     closeRoleModal();
+    closeTagModal();
     await refreshRegisterConfig();
     state.adminUsers = {
       ...state.adminUsers,
@@ -1287,11 +1443,22 @@ async function refreshMe(options = {}) {
     };
     state.ui.view = 'console';
     state.ui.adminSection = 'users';
-    state.history = { ...state.history, page: 1, total: 0, totalPages: 1, hasRunningJobs: false };
+    state.history = {
+      ...state.history,
+      page: 1,
+      total: 0,
+      totalPages: 1,
+      hasRunningJobs: false,
+      query: '',
+      capability: '',
+      status: '',
+      favoriteOnly: false,
+      tagIds: [],
+    };
     state.ledger = { ...state.ledger, page: 1, total: 0, totalPages: 1 };
     renderAuthState();
     renderAdminSettingsForm();
-    await Promise.all([refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels()]);
+    await Promise.all([refreshLibraryTags(), refreshHistory({ page: 1 }), refreshLedger({ page: 1 }), refreshModels()]);
     updatePromptCounter();
   }
 }
@@ -1715,6 +1882,10 @@ function renderHistoryRows(rows) {
     const status = String(row.status || '').toLowerCase();
     const errorText = row.error_message ? `<p class="job-error">错误：${escapeHtml(row.error_message)}</p>` : '';
     const favoriteActive = row.is_favorite ? 'active' : '';
+    const tags = Array.isArray(row.tags) ? row.tags : [];
+    const tagsHtml = tags.length
+      ? tags.map((tag) => `<span class="tag-chip active subtle">${escapeHtml(tag.name)}</span>`).join('')
+      : '<span class="hint compact">未打标签</span>';
 
     div.className = 'history-item job';
     div.innerHTML = `
@@ -1732,6 +1903,10 @@ function renderHistoryRows(rows) {
         </div>
         <p class="job-meta">模型：${escapeHtml(row.model_name || row.model_code || '-')} ｜ 消耗：${escapeHtml(row.cost_points)}</p>
         <p class="job-prompt">${escapeHtml(row.prompt_text || '')}</p>
+        <div class="job-tag-row">
+          <div class="chip-list job-tag-list">${tagsHtml}</div>
+          <button type="button" class="ghost compact job-tag-manage">标签</button>
+        </div>
         <p class="job-meta">${formatTime(row.created_at)}</p>
         ${errorText}
       </div>
@@ -1769,6 +1944,8 @@ function renderHistoryRows(rows) {
       previewBtn.addEventListener('click', () => openPreview(row));
     }
 
+    div.querySelector('.job-tag-manage')?.addEventListener('click', () => openTagModal(row));
+
     els.historyList.appendChild(div);
   });
 }
@@ -1781,6 +1958,11 @@ async function refreshHistory(options = {}) {
   if (typeof options.capability === 'string') state.history.capability = options.capability.trim();
   if (typeof options.status === 'string') state.history.status = options.status.trim();
   if (options.favoriteOnly !== undefined) state.history.favoriteOnly = Boolean(options.favoriteOnly);
+  if (options.tagIds !== undefined) {
+    state.history.tagIds = Array.isArray(options.tagIds)
+      ? [...new Set(options.tagIds.map((item) => Number.parseInt(item, 10)).filter((item) => Number.isInteger(item) && item > 0))]
+      : [];
+  }
   if (!silent) syncHistoryFiltersToInputs();
 
   if (state.user === null) {
@@ -1800,6 +1982,7 @@ async function refreshHistory(options = {}) {
   if (state.history.capability) queryParams.set('capability', state.history.capability);
   if (state.history.status) queryParams.set('status', state.history.status);
   if (state.history.favoriteOnly) queryParams.set('favorite', '1');
+  if (state.history.tagIds.length > 0) queryParams.set('tagIds', state.history.tagIds.join(','));
 
   const data = await api(`/api/generation/history?${queryParams.toString()}`);
   const rows = Array.isArray(data?.items) ? data.items : [];
@@ -1878,9 +2061,11 @@ async function handleLogout() {
   state.costs = [];
   state.models = [];
   state.modelsByCapability = {};
+  state.tags.items = [];
   closeAdminDetailModal();
   closePointsModal();
   closeRoleModal();
+  closeTagModal();
   state.adminUsers = {
     ...state.adminUsers,
     page: 1,
@@ -1936,9 +2121,11 @@ async function handleLogout() {
     capability: '',
     status: '',
     favoriteOnly: false,
+    tagIds: [],
   };
   state.ledger = { ...state.ledger, page: 1, total: 0, totalPages: 1 };
   renderAuthState();
+  renderHistoryTagFilters();
   renderAdminSettingsForm();
   await Promise.all([
     refreshHistory({ page: 1 }),
@@ -2153,6 +2340,7 @@ els.historySearchBtn?.addEventListener('click', async () => {
       query: els.historySearchInput.value,
       capability: els.historyCapabilityFilter.value,
       status: els.historyStatusFilter.value,
+      tagIds: state.history.tagIds,
     });
   } catch (err) {
     setGlobalMsg(err.message);
@@ -2171,6 +2359,7 @@ els.historyResetBtn?.addEventListener('click', async () => {
       capability: '',
       status: '',
       favoriteOnly: false,
+      tagIds: [],
     });
   } catch (err) {
     setGlobalMsg(err.message);
@@ -2189,6 +2378,7 @@ els.historyFavoriteOnlyBtn?.addEventListener('click', async () => {
       query: els.historySearchInput.value,
       capability: els.historyCapabilityFilter.value,
       status: els.historyStatusFilter.value,
+      tagIds: state.history.tagIds,
     });
   } catch (err) {
     setGlobalMsg(err.message);
@@ -2208,6 +2398,7 @@ els.historySearchInput?.addEventListener('keydown', async (event) => {
       query: els.historySearchInput.value,
       capability: els.historyCapabilityFilter.value,
       status: els.historyStatusFilter.value,
+      tagIds: state.history.tagIds,
     });
   } catch (err) {
     setGlobalMsg(err.message);
@@ -2398,6 +2589,8 @@ els.adminDetailCloseBtn.addEventListener('click', closeAdminDetailModal);
 els.adminDetailBackdrop.addEventListener('click', closeAdminDetailModal);
 els.roleCloseBtn.addEventListener('click', closeRoleModal);
 els.roleBackdrop.addEventListener('click', closeRoleModal);
+els.tagCloseBtn.addEventListener('click', closeTagModal);
+els.tagBackdrop.addEventListener('click', closeTagModal);
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && els.previewModal.classList.contains('hidden') === false) {
     closePreview();
@@ -2411,10 +2604,48 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && els.adminDetailModal.classList.contains('hidden') === false) {
     closeAdminDetailModal();
   }
+  if (event.key === 'Escape' && els.tagModal.classList.contains('hidden') === false) {
+    closeTagModal();
+  }
 });
 
 els.pointsActionSelect.addEventListener('change', () => {
   els.pointsModalTitle.textContent = els.pointsActionSelect.value === 'deduct' ? '扣减积分' : '发放积分';
+});
+
+els.tagCreateBtn.addEventListener('click', async () => {
+  if (state.user === null) {
+    requireLogin('请先登录');
+    return;
+  }
+  const name = String(els.tagCreateInput.value || '').trim();
+  if (!name) {
+    setTagFormMsg('请输入标签名称');
+    return;
+  }
+  try {
+    setButtonLoading(els.tagCreateBtn, '新增中...', true);
+    const tag = await api('/api/library/tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    els.tagCreateInput.value = '';
+    await refreshLibraryTags();
+    state.ui.tagSelectedIds = [...new Set([...(state.ui.tagSelectedIds || []), Number(tag.id)])];
+    renderTagModalOptions();
+    setTagFormMsg(`已新增标签 ${tag.name}`, 'success');
+  } catch (err) {
+    setTagFormMsg(err.message);
+  } finally {
+    setButtonLoading(els.tagCreateBtn, '新增中...', false);
+  }
+});
+
+els.tagCreateInput.addEventListener('keydown', async (event) => {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  els.tagCreateBtn.click();
 });
 
 els.pointsForm.addEventListener('submit', async (event) => {
@@ -2514,6 +2745,32 @@ els.roleForm.addEventListener('submit', async (event) => {
     setRoleFormMsg(err.message);
   } finally {
     setButtonLoading(els.roleSubmitBtn, '提交中...', false);
+  }
+});
+
+els.tagForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const targetJob = state.ui.tagTargetJob;
+  if (!targetJob?.job_uuid) {
+    setTagFormMsg('未找到目标任务');
+    return;
+  }
+
+  try {
+    setButtonLoading(els.tagSubmitBtn, '保存中...', true);
+    await api(`/api/library/jobs/${encodeURIComponent(targetJob.job_uuid)}/tags`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tagIds: state.ui.tagSelectedIds || [] }),
+    });
+    closeTagModal();
+    await refreshLibraryTags();
+    await refreshHistory({ page: state.history.page, tagIds: state.history.tagIds });
+    setGlobalMsg('标签已更新');
+  } catch (err) {
+    setTagFormMsg(err.message);
+  } finally {
+    setButtonLoading(els.tagSubmitBtn, '保存中...', false);
   }
 });
 
@@ -2645,6 +2902,7 @@ renderModelOptions();
 updatePromptCounter();
 renderRegisterAvailability();
 renderAdminSettingsForm();
+renderHistoryTagFilters();
 renderAuthState();
 refreshRegisterConfig();
 refreshMe();

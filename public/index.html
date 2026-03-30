@@ -6,7 +6,7 @@
     <title>ATF Console</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="shortcut icon" href="/favicon.svg" />
-    <link rel="stylesheet" href="/styles.css?v=20260330a" />
+    <link rel="stylesheet" href="/styles.css?v=20260330b" />
   </head>
   <body>
     <div class="bg-shape bg-shape-a"></div>
@@ -214,6 +214,10 @@
 	                <button type="button" id="historyFavoriteOnlyBtn" class="ghost compact">仅看收藏</button>
 	                <button type="button" id="historySearchBtn" class="ghost compact">搜索</button>
 	                <button type="button" id="historyResetBtn" class="ghost compact">重置</button>
+	              </div>
+	              <div class="history-filter-tags">
+	                <p class="hint compact">标签筛选</p>
+	                <div id="historyTagFilterList" class="chip-list"></div>
 	              </div>
 	              <div id="historyList" class="history history-jobs"></div>
 	            </div>
@@ -506,6 +510,28 @@
 	      </div>
 	    </div>
 
-	    <script src="/app.js?v=20260327a"></script>
+	    <div id="tagModal" class="preview-modal hidden">
+	      <div class="preview-backdrop" id="tagBackdrop"></div>
+	      <div class="preview-dialog admin-dialog">
+	        <div class="preview-head">
+	          <h3 id="tagModalTitle">管理标签</h3>
+	          <button id="tagCloseBtn" class="ghost compact" type="button">关闭</button>
+	        </div>
+	        <p id="tagTargetText" class="hint compact"></p>
+	        <form id="tagForm" class="admin-points-form">
+	          <div id="tagOptionList" class="tag-option-list"></div>
+	          <div class="tag-create-row">
+	            <input id="tagCreateInput" type="text" maxlength="32" placeholder="新建标签，最长 32 字" />
+	            <button id="tagCreateBtn" class="ghost compact" type="button">新增标签</button>
+	          </div>
+	          <p id="tagFormMsg" class="form-msg hidden"></p>
+	          <div class="form-actions inline-actions">
+	            <button id="tagSubmitBtn" type="submit">保存标签</button>
+	          </div>
+	        </form>
+	      </div>
+	    </div>
+
+	    <script src="/app.js?v=20260330b"></script>
   </body>
 </html>

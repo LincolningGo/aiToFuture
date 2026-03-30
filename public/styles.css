@@ -682,6 +682,12 @@ button.compact {
   align-items: center;
 }
 
+.history-filter-tags {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
 .history-item {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -719,6 +725,18 @@ button.compact {
 .job-links {
   color: var(--muted);
   font-size: 13px;
+}
+
+.job-tag-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.job-tag-list {
+  min-height: 34px;
 }
 
 .job-prompt {
@@ -786,6 +804,57 @@ button.compact {
   color: #f0ad2c;
   border-color: rgba(240, 173, 44, 0.35);
   background: rgba(240, 173, 44, 0.08);
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+button.tag-chip {
+  cursor: pointer;
+}
+
+.tag-chip.active {
+  background: rgba(11, 139, 132, 0.08);
+  border-color: rgba(11, 139, 132, 0.25);
+  color: var(--accent-strong);
+}
+
+.tag-chip.subtle {
+  background: #f6fbfc;
+}
+
+.tag-option-list {
+  display: grid;
+  gap: 10px;
+}
+
+.tag-option-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fbfefe;
+}
+
+.tag-create-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .job-preview {
@@ -1284,6 +1353,11 @@ button.compact {
     grid-template-columns: 1fr 1fr;
   }
 
+  .job-tag-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .admin-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1385,6 +1459,10 @@ button.compact {
   .meta-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .tag-create-row {
+    grid-template-columns: 1fr;
   }
 
   .auth-layer {
